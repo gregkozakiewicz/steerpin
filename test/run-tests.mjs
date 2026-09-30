@@ -6,20 +6,22 @@ import os from 'node:os';
 import path from 'node:path';
 
 const script = path.resolve(import.meta.dirname, '../scripts/steerpin.mjs');
-let home, project;
+let home, project, userHome;
 
 function reset() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'steerpin-test-'));
   home = path.join(root, 'home');
   project = path.join(root, 'project');
+  userHome = path.join(root, 'user');
   fs.mkdirSync(project);
+  fs.mkdirSync(userHome);
 }
 
 function run(args, input = '') {
   try {
     return execFileSync('node', [script, ...args], {
       input,
-      env: { ...process.env, STEERPIN_HOME: home, CLAUDE_PROJECT_DIR: project },
+      env: { ...process.env, HOME: userHome, STEERPIN_HOME: home, CLAUDE_PROJECT_DIR: project },
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -192,6 +194,26 @@ test('session-start uses the SessionStart event name', () => {
   inbox({ type: 'priority', text: 'p' });
   const out = JSON.parse(run(['session-start'], JSON.stringify({ source: 'compact' })));
   assert.equal(out.hookSpecificOutput.hookEventName, 'SessionStart');
+});
+
+test('session-start suggests setting up hotkeys only when needed', () => {
+  const hasHammerspoon = process.platform === 'darwin' && fs.existsSync('/Applications/Hammerspoon.app');
+  const tip = () => {
+    const out = run(['session-start'], '{}');
+    return out ? JSON.parse(out).systemMessage ?? '' : '';
+  };
+  if (!hasHammerspoon) {
+    assert.equal(tip(), '');
+    return;
+  }
+  assert.match(tip(), /Hammerspoon found\. Run \/steerpin:setup-hotkeys/);
+  fs.mkdirSync(path.join(userHome, '.hammerspoon'));
+  fs.writeFileSync(path.join(userHome, '.hammerspoon/steerpin.lua'), '-- old');
+  assert.match(tip(), /out of date/);
+  fs.copyFileSync(path.resolve(import.meta.dirname, '../macos/hammerspoon/steerpin.lua'), path.join(userHome, '.hammerspoon/steerpin.lua'));
+  assert.equal(tip(), '');
+  inbox({ type: 'priority', text: 'p' });
+  assert.equal(JSON.parse(run(['hook'], '{}')).systemMessage, 'steerpin: new mark [1]'); // no tip on normal messages
 });
 
 test('unwritable project fails silently with exit 0', () => {
