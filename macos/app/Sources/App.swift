@@ -198,6 +198,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    @objc private func showConnection() {
+        flash(symbol: "checkmark.circle.fill", tint: .systemGreen, title: "Connected to Claude Code",
+              detail: "Steerpin plugin \(ClaudeCode.installedVersion ?? "") is installed")
+    }
+
     @objc private func getClaudeCode() {
         NSWorkspace.shared.open(URL(string: "https://code.claude.com")!)
     }
@@ -278,8 +283,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case _ where connecting:
             menu.addItem(info("Connecting…"))
         case .connected:
-            let entry = info("Connected")
-            entry.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+            let entry = item("Connected", #selector(showConnection))
+            let config = NSImage.SymbolConfiguration(paletteColors: [.white, .systemGreen])
+            entry.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)?
+                .withSymbolConfiguration(config)
             menu.addItem(entry)
         case .notInstalled:
             menu.addItem(item("Connect to Claude Code", #selector(connectClaudeCode)))
