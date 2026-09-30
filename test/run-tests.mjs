@@ -202,6 +202,7 @@ test('session-start suggests setting up hotkeys only when needed', () => {
     const out = run(['session-start'], '{}');
     return out ? JSON.parse(out).systemMessage ?? '' : '';
   };
+  process.env.STEERPIN_APP = path.join(userHome, 'Applications/Steerpin.app'); // app not installed
   if (!hasHammerspoon) {
     assert.equal(tip(), '');
     return;
@@ -214,6 +215,11 @@ test('session-start suggests setting up hotkeys only when needed', () => {
   assert.equal(tip(), '');
   inbox({ type: 'priority', text: 'p' });
   assert.equal(JSON.parse(run(['hook'], '{}')).systemMessage, 'steerpin: new mark [1]'); // no tip on normal messages
+
+  fs.rmSync(path.join(userHome, '.hammerspoon'), { recursive: true });
+  fs.mkdirSync(process.env.STEERPIN_APP, { recursive: true });
+  assert.equal(tip(), ''); // the Steerpin app handles hotkeys
+  delete process.env.STEERPIN_APP;
 });
 
 test('.claude/steerpin/ is added to .gitignore once, only in git repos', () => {

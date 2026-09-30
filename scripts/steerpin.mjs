@@ -325,11 +325,15 @@ function userMessage(result, truncated) {
   return parts.length ? `steerpin: ${parts.join('; ')}` : '';
 }
 
-// Suggests /steerpin:setup-hotkeys when Hammerspoon is installed but the hotkeys are missing or outdated.
-// Never changes anything itself.
+// Suggests /steerpin:setup-hotkeys when Hammerspoon is installed but its hotkeys are missing or outdated.
+// Silent when the Steerpin app handles the hotkeys. Never changes anything itself.
 function hotkeyTip() {
   if (process.platform !== 'darwin') return '';
   const home = os.homedir();
+  const steerpinApps = process.env.STEERPIN_APP
+    ? [process.env.STEERPIN_APP]
+    : ['/Applications/Steerpin.app', path.join(home, 'Applications/Steerpin.app')];
+  if (steerpinApps.some((app) => fs.existsSync(app))) return '';
   const apps = ['/Applications/Hammerspoon.app', path.join(home, 'Applications/Hammerspoon.app')];
   if (!apps.some((app) => fs.existsSync(app))) return '';
   const bundled = fs.readFileSync(new URL('../macos/hammerspoon/steerpin.lua', import.meta.url), 'utf8');

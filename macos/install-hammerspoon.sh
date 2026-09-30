@@ -5,6 +5,10 @@ if [ ! -d /Applications/Hammerspoon.app ] && [ ! -d "$HOME/Applications/Hammersp
   echo "Hammerspoon is not installed. Install it first: brew install --cask hammerspoon"
   exit 1
 fi
+if pgrep -xq Steerpin; then
+  echo "The Steerpin app is running and already handles the hotkeys. Quit it first if you want to use Hammerspoon instead."
+  exit 1
+fi
 src="$(cd "$(dirname "$0")" && pwd)/hammerspoon/steerpin.lua"
 dir="$HOME/.hammerspoon"
 mkdir -p "$dir"

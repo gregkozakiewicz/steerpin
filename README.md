@@ -15,9 +15,9 @@ Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key
 
 ## Setup
 
-About five minutes. You need:
+About three minutes. You need:
 
-- macOS (for the hotkeys; on other systems, see [Without hotkeys](#without-hotkeys))
+- macOS 13 or later (for the hotkeys; on other systems, see [Without hotkeys](#without-hotkeys))
 - [Claude Code](https://code.claude.com)
 - [Node.js](https://nodejs.org) 18 or later. Check with `node --version`.
 
@@ -35,48 +35,26 @@ In Claude Code, run these two commands:
 
 Then quit and reopen Claude Code so the plugin loads.
 
-### Step 2: install Hammerspoon
+### Step 2: install the Steerpin app
 
-[Hammerspoon](https://www.hammerspoon.org) is a free, open source Mac app that runs small scripts when you press a key. Steerpin uses it for the hotkeys.
+The app is a small menu bar app that owns the hotkeys. It copies your selection, puts your clipboard back, and confirms each mark with a popup under its pin icon.
 
-1. **Install it.** With [Homebrew](https://brew.sh):
+1. **[Download Steerpin.zip](https://github.com/gregkozakiewicz/steerpin/releases/latest/download/Steerpin.zip)**, unzip it, and drag **Steerpin.app** into **Applications**.
+2. **Open it.** The app isn't signed with a paid Apple developer account, so the first time macOS says it can't verify it:
+   1. Click **Done** (not Move to Trash).
+   2. Open **System Settings › Privacy & Security**, scroll down to the message about Steerpin, and click **Open Anyway**. Confirm with your password or Touch ID.
 
-   ```bash
-   brew install --cask hammerspoon
-   ```
+   You only do this once.
+3. **Allow Accessibility access.** macOS asks for it right away. Click **Open System Settings** and turn on **Steerpin**. The app needs this to copy your selection, and it's the only permission it asks for.
+4. When you see **Steerpin is ready** under the pin icon, you're done.
 
-   Or download the latest `Hammerspoon-x.x.x.zip` from [its releases page](https://github.com/Hammerspoon/hammerspoon/releases/latest), unzip it, and drag **Hammerspoon.app** into **Applications**.
+Click the pin icon and choose **Launch at Login** so the hotkeys keep working after a restart.
 
-2. **Open it** from Applications. If macOS says it was downloaded from the internet, click **Open**.
-
-3. **Set its preferences.** A Preferences window opens the first time (later: click the hammer icon in the menu bar › **Preferences…**). Tick:
-   - **Launch Hammerspoon at login**, so the hotkeys work after a restart
-   - **Show menu icon**, so you can reload it from the menu bar
-
-4. **Give it Accessibility access.** Hammerspoon needs this to copy your selection.
-   1. Open **System Settings › Privacy & Security › Accessibility**. (The **Enable Accessibility** button in Hammerspoon's Preferences takes you there too.)
-   2. Turn on the switch next to **Hammerspoon**. macOS asks for your password or Touch ID.
-   3. If Hammerspoon isn't in the list, click **+** at the bottom, choose **Applications › Hammerspoon**, then turn it on.
-
-   Note: **Accessibility** is a different page from **Menu Bar** in System Settings. The switch has to be on the Accessibility page.
-
-### Step 3: add the Steerpin hotkeys
-
-In Claude Code, run:
-
-```
-/steerpin:setup-hotkeys
-```
-
-If you forget, Steerpin reminds you: when a session starts and Hammerspoon is installed but the hotkeys aren't, you'll see `steerpin: Hammerspoon found. Run /steerpin:setup-hotkeys to turn on the hotkeys.` The same reminder appears when a plugin update brings new hotkeys.
-
-This copies the hotkey script into `~/.hammerspoon/`, loads it from your `~/.hammerspoon/init.lua` and restarts Hammerspoon. Any Hammerspoon config you already have stays as it is.
-
-### Step 4: test it
+### Step 3: test it
 
 1. Select a sentence anywhere, for example in a browser.
 2. Press `⌥⇧R`.
-3. A notification should say **Marked as priority** with a preview of your text.
+3. A popup under the pin icon says **Marked as priority** with a preview of your text.
 
 Then in Claude Code, send any message. You'll see a line like `steerpin: new mark [1]`, and Claude now has the mark.
 
@@ -85,7 +63,7 @@ If something doesn't work, see [Troubleshooting](#troubleshooting).
 ## Using it
 
 1. Claude writes an answer.
-2. Select the part you want to mark and press a hotkey. The notification's title tells you which mark you made.
+2. Select the part you want to mark and press a hotkey. The popup tells you which mark you made.
 3. Send your next message as normal.
 
 With your message, Claude receives your active marks:
@@ -106,6 +84,10 @@ Start your reply with one short line per new wrong mark, e.g. "Noted, [2] was wr
 
 When you mark something as wrong, Claude opens its next reply with a line like *"Noted, [2] was wrong: …"*. Priority and wrong marks are sent again with every message until you remove them. Roadmap and later marks are written to their files once and aren't sent to Claude.
 
+### The menu bar app
+
+Click the pin icon to see the shortcuts, how many marks are waiting for your next message, your recent marks, **Launch at Login**, and **Quit**. A crossed-out pin means Accessibility access is off.
+
 ### Commands
 
 | Command | What it does |
@@ -114,20 +96,18 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 | `/steerpin:unmark 3` | Remove mark 3. Several at once: `/steerpin:unmark 3 5` |
 | `/steerpin:clear-marks` | Remove all priority and wrong marks. Roadmap and later files are not touched |
 | `/steerpin:mark wrong <text>` | Mark text without a hotkey. Also `priority`, `roadmap`, `later` |
-| `/steerpin:setup-hotkeys` | Install or update the Hammerspoon hotkeys |
+| `/steerpin:setup-hotkeys` | Only for the [Hammerspoon alternative](#alternative-hammerspoon) |
 
 ## Troubleshooting
 
 **Nothing happens when I press the keys.**
-- Check that Hammerspoon is running: the hammer icon should be in the menu bar.
-- Check that its switch is on in **System Settings › Privacy & Security › Accessibility**. If it is and the keys still don't work, turn it off and on again, then **Reload Config**.
-- Click the hammer icon › **Console…** and look for red error lines.
+- Check that Steerpin is running: the pin icon should be in the menu bar. If not, open it from Applications.
+- If the pin is crossed out, click it › **Allow Accessibility Access…** and turn Steerpin on.
+- If Accessibility is on but the keys still don't work, turn Steerpin off and on again in **System Settings › Privacy & Security › Accessibility**. This can be needed after updating the app.
+- Click the pin icon. If a shortcut says **(used by another app)**, another app has taken that key combination. Quit that app, then quit and reopen Steerpin.
 
-**The notification says "No text selected".**
+**The popup says "No text selected".**
 Select the text again and press the key while the selection is still highlighted. Some apps clear the selection when you click elsewhere.
-
-**No notification appears, but marks do arrive.**
-Allow notifications for Hammerspoon in **System Settings › Notifications › Hammerspoon**.
 
 **Claude doesn't see my marks.**
 - Quit and reopen Claude Code after installing the plugin.
@@ -137,9 +117,16 @@ Allow notifications for Hammerspoon in **System Settings › Notifications › H
 **My clipboard changed.**
 It shouldn't: Steerpin puts back whatever you had copied. If it happens, tell us in an [issue](https://github.com/gregkozakiewicz/steerpin/issues) which app you were marking from.
 
-## Changing the keys
+## Alternative: Hammerspoon
 
-Open `~/.hammerspoon/init.lua` and replace the line `require("steerpin")` with, for example:
+If you already use [Hammerspoon](https://www.hammerspoon.org), you can run the hotkeys there instead of the app. Don't run both: they use the same shortcuts.
+
+1. Install Hammerspoon (`brew install --cask hammerspoon`), open it, and turn it on in **System Settings › Privacy & Security › Accessibility**.
+2. In Claude Code, run `/steerpin:setup-hotkeys`. It adds the Steerpin script to `~/.hammerspoon/` and restarts Hammerspoon. Your existing Hammerspoon config stays as it is.
+
+When a plugin update changes the hotkeys, a session-start message reminds you to run `/steerpin:setup-hotkeys` again.
+
+To change keys, replace `require("steerpin")` in `~/.hammerspoon/init.lua` with, for example:
 
 ```lua
 require("steerpin").setup({
@@ -150,11 +137,9 @@ require("steerpin").setup({
 })
 ```
 
-Keys you don't list keep their defaults. Click the hammer icon › **Reload Config** afterwards. Running `/steerpin:setup-hotkeys` again won't undo your changes.
-
 ## Without hotkeys
 
-On Linux or Windows, or if you'd rather not use Hammerspoon, mark text inside Claude Code with `/steerpin:mark`:
+On Linux or Windows, or if you'd rather not install the app, mark text inside Claude Code with `/steerpin:mark`:
 
 ```
 /steerpin:mark wrong esbuild can't generate type declarations
@@ -213,6 +198,12 @@ Each project folder has its own set. Opening Claude Code in a different folder s
 ```bash
 node test/run-tests.mjs
 ```
+
+```bash
+macos/app/build.sh
+```
+
+The app is plain Swift built with the Command Line Tools, no Xcode needed. `build.sh` makes a universal `Steerpin.app` and `Steerpin.zip` in `macos/app/build/`.
 
 ```bash
 claude --plugin-dir .
