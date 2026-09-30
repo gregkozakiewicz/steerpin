@@ -56,6 +56,7 @@ final class HUD {
 
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
+            glass.style = .clear // the gloss layer supplies the body, so let the background through
             glass.contentView = content
             panel.contentView = glass
         } else {
@@ -128,12 +129,14 @@ final class HUD {
     }
 }
 
-/// The glossy finish drawn over the glass: a bright top edge, a sheen across the top half,
-/// a light rim fading downwards and a slightly darker bottom. Visible on any background.
+/// The glossy finish drawn over the glass: a translucent body, a crisp sheen across the top half,
+/// a soft glow along the bottom and a light rim. Visible on any background.
 private final class GlossView: NSView {
     var cornerRadius: CGFloat = 20 { didSet { needsLayout = true } }
 
+    private let body = CALayer()
     private let base = CAGradientLayer()
+    private let glow = CAGradientLayer()
     private let sheen = CAGradientLayer()
     private let rim = CAGradientLayer()
     private let rimShape = CAShapeLayer()
@@ -142,7 +145,9 @@ private final class GlossView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        layer?.addSublayer(body)
         layer?.addSublayer(base)
+        layer?.addSublayer(glow)
         layer?.addSublayer(sheen)
         rim.mask = rimShape
         layer?.addSublayer(rim)
@@ -171,23 +176,31 @@ private final class GlossView: NSView {
         let white = { (a: CGFloat) in NSColor.white.withAlphaComponent(a).cgColor }
         let black = { (a: CGFloat) in NSColor.black.withAlphaComponent(a).cgColor }
 
+        body.frame = bounds
+        body.backgroundColor = dark ? black(0.35) : NSColor(white: 0.97, alpha: 0.5).cgColor
+
         // Layers are not flipped: y = 1 is the top.
         base.frame = bounds
         base.startPoint = CGPoint(x: 0.5, y: 1)
         base.endPoint = CGPoint(x: 0.5, y: 0)
-        base.colors = dark ? [white(0.10), white(0.0), black(0.06)] : [white(0.18), white(0.0), black(0.04)]
+        base.colors = dark ? [white(0.10), white(0.0), black(0.06)] : [white(0.15), white(0.0), black(0.03)]
         base.locations = [0, 0.55, 1]
 
-        sheen.frame = CGRect(x: 1.5, y: bounds.height * 0.48, width: bounds.width - 3, height: bounds.height * 0.52 - 1.5)
+        glow.frame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height / 2)
+        glow.startPoint = CGPoint(x: 0.5, y: 1)
+        glow.endPoint = CGPoint(x: 0.5, y: 0)
+        glow.colors = dark ? [white(0.0), white(0.12)] : [white(0.0), white(0.3)]
+
+        sheen.frame = CGRect(x: 1.5, y: bounds.height * 0.52, width: bounds.width - 3, height: bounds.height * 0.48 - 1.5)
         sheen.cornerRadius = min(cornerRadius, sheen.frame.height / 2)
         sheen.startPoint = CGPoint(x: 0.5, y: 1)
         sheen.endPoint = CGPoint(x: 0.5, y: 0)
-        sheen.colors = dark ? [white(0.22), white(0.0)] : [white(0.65), white(0.08)]
+        sheen.colors = dark ? [white(0.28), white(0.02)] : [white(1.0), white(0.45)]
 
         rim.frame = bounds
         rim.startPoint = CGPoint(x: 0.5, y: 1)
         rim.endPoint = CGPoint(x: 0.5, y: 0)
-        rim.colors = dark ? [white(0.5), white(0.08), white(0.14)] : [white(0.95), white(0.2), black(0.08)]
+        rim.colors = dark ? [white(0.55), white(0.08), white(0.14)] : [white(1.0), white(0.15), black(0.12)]
         rim.locations = [0, 0.6, 1]
         rimShape.frame = bounds
         rimShape.path = CGPath(roundedRect: bounds.insetBy(dx: 0.6, dy: 0.6),
