@@ -10,6 +10,7 @@ final class HUD {
     private let content = NSView()
     private var hideWork: DispatchWorkItem?
 
+    static let tintStrength: CGFloat = 0.35
     private let height: CGFloat = 40
     private let hintHeight: CGFloat = 58
 
@@ -84,6 +85,8 @@ final class HUD {
         let radius = hint == nil ? size.height / 2 : 18
         if #available(macOS 26.0, *), let glass = panel.contentView as? NSGlassEffectView {
             glass.cornerRadius = radius
+            // Apple's tinted glass in the mark's colour; neutral popups stay clear.
+            glass.tintColor = tint == .secondaryLabelColor ? nil : tint.withAlphaComponent(HUD.tintStrength)
         } else if let frosted = panel.contentView {
             frosted.layer?.cornerRadius = radius
             frosted.layer?.masksToBounds = true
