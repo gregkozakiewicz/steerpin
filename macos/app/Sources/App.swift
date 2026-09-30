@@ -34,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.copySteering()
         }
 
+        ClaudeCode.forgetStaleUpdateCheck()
+
         // The app used to keep its own copy lists; the project files replaced them.
         try? FileManager.default.removeItem(at: Inbox.folder.appendingPathComponent("chat-marks.json"))
 
@@ -45,6 +47,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             watchForAccess()
         }
         refreshPluginState()
+    }
+
+    /// Opening Steerpin again (Finder, Spotlight) while it runs: a way in when the menu bar hides the pin.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Steerpin is running"
+        alert.informativeText = """
+            Look for the pin in your menu bar. If you can't see it, macOS is hiding it: \
+            either the menu bar is full, or Steerpin is switched off in System Settings › Menu Bar.
+            """
+        alert.icon = NSApp.applicationIconImage
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Open Menu Bar Settings")
+        alert.addButton(withTitle: "Quit Steerpin")
+        NSApp.activate(ignoringOtherApps: true)
+        switch alert.runModal() {
+        case .alertSecondButtonReturn:
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.ControlCenter-Settings.extension")!)
+        case .alertThirdButtonReturn:
+            NSApp.terminate(nil)
+        default:
+            break
+        }
+        return false
     }
 
     // MARK: Marking

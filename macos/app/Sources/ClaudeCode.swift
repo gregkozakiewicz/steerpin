@@ -58,7 +58,13 @@ enum ClaudeCode {
         return .outdated(installed: installed)
     }
 
-    private static let latestKey = "latestPublishedPlugin"
+    /// Per app version: a newer app release checks for plugin updates again.
+    private static var latestKey: String { "latestPublishedPlugin-\(appVersion)" }
+
+    /// 0.3.1 to 0.4.0 stored this without a version and never offered updates again.
+    static func forgetStaleUpdateCheck() {
+        UserDefaults.standard.removeObject(forKey: "latestPublishedPlugin")
+    }
 
     /// Installs the plugin, or updates it when it's already there. Runs off the main thread.
     static func connect(completion: @escaping (_ ok: Bool, _ message: String) -> Void) {
