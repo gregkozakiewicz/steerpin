@@ -9,7 +9,9 @@ Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key
 | `⌥⇧A` | **Add to roadmap** | Nothing. The text is saved to `.claude/steerpin/roadmap.md`, word for word |
 | `⌥⇧S` | **Save for later** | Nothing. The text is saved to `.claude/steerpin/later.md`, word for word |
 
-`⌥` is Option and `⇧` is Shift. All four keys sit under your left hand.
+Marked the wrong thing? `⌥⇧Z` undoes your last mark.
+
+`⌥` is Option and `⇧` is Shift. All the keys sit under your left hand.
 
 **Why:** in long sessions, important points drift out of focus and wrong statements get reused as fact. The chat has no way to mark text, and plugins can't add buttons to it. So Steerpin marks text with system-wide hotkeys, and a Claude Code hook passes the marks to Claude. They survive long chats and `/compact`.
 
@@ -82,6 +84,11 @@ Start your reply with one short line per new wrong mark, e.g. "Noted, [2] was wr
 
 When you mark something as wrong, Claude opens its next reply with a line like *"Noted, [2] was wrong: …"*. Priority and wrong marks are sent again with every message until you remove them. Roadmap and later marks are written to their files once and aren't sent to Claude.
 
+### Undo
+
+- **Before you send your next message:** press `⌥⇧Z` (or pin menu › **Undo Last Mark**). The newest waiting mark is removed, and Claude never sees it.
+- **After you sent it:** run `/steerpin:undo` in Claude Code. It removes what that message delivered, and if a mark replaced an older one (priority re-marked as wrong), it brings the old one back.
+
 ### The menu bar app
 
 Click the pin icon to see the shortcuts, how many marks are waiting for your next message, your recent marks, the Claude Code connection, **Launch at Login**, and **Quit**. When the app is newer than your Claude Code plugin, it offers **Update Plugin**. A crossed-out pin means Accessibility access is off.
@@ -93,6 +100,7 @@ Click the pin icon to see the shortcuts, how many marks are waiting for your nex
 | `/steerpin:marks` | List active marks with their ids |
 | `/steerpin:unmark 3` | Remove mark 3. Several at once: `/steerpin:unmark 3 5` |
 | `/steerpin:clear-marks` | Remove all priority and wrong marks. Roadmap and later files are not touched |
+| `/steerpin:undo` | Take back everything your last message delivered: marks, roadmap and later items |
 | `/steerpin:mark wrong <text>` | Mark text without a hotkey. Also `priority`, `roadmap`, `later` |
 | `/steerpin:setup-hotkeys` | Only for the [Hammerspoon alternative](#alternative-hammerspoon) |
 
@@ -101,7 +109,7 @@ Click the pin icon to see the shortcuts, how many marks are waiting for your nex
 **Nothing happens when I press the keys.**
 - Check that Steerpin is running: the pin icon should be in the menu bar. If not, open it from Applications.
 - If the pin is crossed out, click it › **Allow Accessibility Access…** and turn Steerpin on.
-- If Accessibility is on but the keys still don't work, turn Steerpin off and on again in **System Settings › Privacy & Security › Accessibility**. This can be needed after updating the app.
+- If Accessibility looks on but the pin stays crossed out, macOS is holding an outdated entry. This can happen once when updating from 0.2.1 or earlier. Run `tccutil reset Accessibility com.gregkozakiewicz.steerpin` in Terminal, then allow Steerpin again.
 - Click the pin icon. If a shortcut says **(used by another app)**, another app has taken that key combination. Quit that app, then quit and reopen Steerpin.
 
 **The popup says "No text selected".**
