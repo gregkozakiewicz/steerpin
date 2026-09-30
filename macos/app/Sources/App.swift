@@ -449,7 +449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Show Steerpin Folder", #selector(openInbox)))
         menu.addItem(item("Steerpin on GitHub", #selector(openGitHub)))
         menu.addItem(.separator())
-        menu.addItem(item("Quit Steerpin", #selector(quit), key: "q"))
+        menu.addItem(item("Quit Steerpin \(ClaudeCode.appVersion)", #selector(quit), key: "q"))
     }
 
     /// Shows ⌥⇧<key> at the right edge of a menu item.
