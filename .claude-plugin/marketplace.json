@@ -11,7 +11,7 @@
     {
       "name": "steerpin",
       "source": "./",
-      "description": "Mark text in a Claude Code chat as priority, wrong, or roadmap with a hotkey. Claude sees your marks on every turn until you remove them."
+      "description": "Highlight text in Claude Code and mark it Priority or Wrong with a hotkey. Your marks persist across turns, helping Claude stay focused, avoid bad assumptions, and reduce repeated corrections."
     }
   ]
 }
