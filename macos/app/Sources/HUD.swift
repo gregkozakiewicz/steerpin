@@ -49,6 +49,7 @@ final class HUD {
 
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
+            glass.style = .clear
             glass.contentView = content
             panel.contentView = glass
         } else {
