@@ -1,0 +1,17 @@
+{
+  "name": "steerpin",
+  "owner": {
+    "name": "Greg Kozakiewicz",
+    "url": "https://github.com/gregkozakiewicz"
+  },
+  "metadata": {
+    "description": "Steerpin: hotkey marks for Claude Code chats."
+  },
+  "plugins": [
+    {
+      "name": "steerpin",
+      "source": "./",
+      "description": "Mark text in a Claude Code chat as priority, wrong, or roadmap with a hotkey. Claude sees your marks on every turn until you remove them."
+    }
+  ]
+}

@@ -1,0 +1,455 @@
+#!/usr/bin/env node
+// Steerpin: moves marks from the global inbox into the project and into Claude's context.
+//
+//   steerpin.mjs hook             UserPromptSubmit hook (reads hook JSON on stdin)
+//   steerpin.mjs session-start    SessionStart hook (reads hook JSON on stdin)
+//   steerpin.mjs list             process the inbox, then print active marks
+//   steerpin.mjs unmark <id...>   remove marks by id
+//   steerpin.mjs clear            remove all priority and wrong marks
+//   steerpin.mjs add <type> [text]      mark text directly (text from args or stdin)
+//   steerpin.mjs capture <type> [text]  append to the global inbox (for other hotkey tools)
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const TYPES = ['priority', 'wrong', 'roadmap', 'later'];
+const ACTIVE_TYPES = ['priority', 'wrong'];
+const HOME = process.env.STEERPIN_HOME || path.join(os.homedir(), '.steerpin');
+const INBOX = path.join(HOME, 'inbox.jsonl');
+const CLAIM_PREFIX = 'inbox.jsonl.claim-';
+const STALE_CLAIM_MS = 30_000;
+const MARKS_REL = '.claude/steerpin/marks.md';
+const CONFIG_REL = '.claude/steerpin/config.json';
+const MAX_CONTEXT_CHARS = 9000;
+const DEFAULTS = {
+  roadmap: 'docs/steerpin/roadmap.md',
+  later: 'docs/steerpin/later.md',
+  maxActiveMarks: 15,
+  maxMarkLength: 500,
+};
+const FILE_HEADINGS = { roadmap: '# Roadmap', later: '# Later' };
+
+// ---------- project + config ----------
+
+function projectDir(input) {
+  return process.env.CLAUDE_PROJECT_DIR || input?.cwd || process.cwd();
+}
+
+function loadConfig(dir) {
+  try {
+    const user = JSON.parse(fs.readFileSync(path.join(dir, CONFIG_REL), 'utf8'));
+    return { ...DEFAULTS, ...user };
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+
+// ---------- inbox ----------
+
+// Claims the inbox by renaming it, so hotkeys writing at the same moment start a fresh file.
+// Claims left behind by a crashed run are picked up once they are stale.
+function takeInbox() {
+  let names;
+  try {
+    names = fs.readdirSync(HOME);
+  } catch {
+    return { items: [], claims: [] };
+  }
+  const now = Date.now();
+  const claims = [];
+  for (const name of names) {
+    if (name !== 'inbox.jsonl') {
+      if (!name.startsWith(CLAIM_PREFIX)) continue;
+      const claimedAt = Number(name.slice(CLAIM_PREFIX.length).split('-')[0]);
+      if (!(now - claimedAt > STALE_CLAIM_MS)) continue;
+    }
+    const target = path.join(HOME, `${CLAIM_PREFIX}${now}-${process.pid}-${claims.length}`);
+    try {
+      fs.renameSync(path.join(HOME, name), target);
+      claims.push(target);
+    } catch {
+      // another session claimed it first
+    }
+  }
+
+  const items = [];
+  for (const file of claims) {
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const item = normalizeItem(JSON.parse(line));
+        if (item) items.push(item);
+      } catch {
+        // skip malformed lines
+      }
+    }
+  }
+  return { items, claims };
+}
+
+function releaseClaims(claims) {
+  for (const file of claims) fs.rmSync(file, { force: true });
+}
+
+function normalizeItem(raw) {
+  if (!raw || !TYPES.includes(raw.type) || typeof raw.text !== 'string') return null;
+  const text = cleanText(raw.text);
+  if (!text) return null;
+  return {
+    type: raw.type,
+    text,
+    timestamp: raw.timestamp || new Date().toISOString(),
+    source: raw.source_app || raw.source || '',
+  };
+}
+
+function cleanText(text) {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((l) => l.replace(/\s+$/, ''))
+    .join('\n')
+    .replace(/^\n+|\n+$/g, '')
+    .trim();
+}
+
+const sameText = (a, b) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
+
+// ---------- marks.md ----------
+
+function marksPath(dir) {
+  return path.join(dir, MARKS_REL);
+}
+
+function readMarks(dir) {
+  let content;
+  try {
+    content = fs.readFileSync(marksPath(dir), 'utf8');
+  } catch {
+    return { nextId: 1, marks: [] };
+  }
+  const marks = [];
+  const header = /^## \[(\d+)\] (priority|wrong)[ \t]*$/gm;
+  const found = [...content.matchAll(header)];
+  found.forEach((m, i) => {
+    const bodyStart = m.index + m[0].length;
+    const bodyEnd = i + 1 < found.length ? found[i + 1].index : content.length;
+    const lines = content.slice(bodyStart, bodyEnd).split('\n');
+    while (lines.length && !lines[0].trim()) lines.shift();
+    let meta = '';
+    if (lines.length && /^_.*_$/.test(lines[0].trim())) meta = lines.shift().trim().slice(1, -1);
+    const text = lines.map((l) => l.replace(/^\\(## \[)/, '$1')).join('\n').trim();
+    if (text) marks.push({ id: Number(m[1]), type: m[2], meta, text });
+  });
+  const stored = content.match(/steerpin: next-id=(\d+)/);
+  const maxId = marks.reduce((max, m) => Math.max(max, m.id), 0);
+  return { nextId: Math.max(stored ? Number(stored[1]) : 1, maxId + 1), marks };
+}
+
+function writeMarks(dir, state) {
+  const file = marksPath(dir);
+  const parts = [
+    '# Steerpin marks',
+    '',
+    `<!-- steerpin: next-id=${state.nextId}. Managed by the steerpin plugin. Remove marks with /steerpin:unmark <id>, or delete a section by hand. -->`,
+  ];
+  for (const m of state.marks) {
+    parts.push('', `## [${m.id}] ${m.type}`);
+    if (m.meta) parts.push(`_${m.meta}_`);
+    parts.push('', m.text.replace(/^## \[/gm, '\\## ['));
+  }
+  writeAtomic(file, parts.join('\n') + '\n');
+}
+
+function writeAtomic(file, content) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, content);
+  fs.renameSync(tmp, file);
+}
+
+function metaLine(item) {
+  const d = new Date(item.timestamp);
+  const valid = !Number.isNaN(d.getTime());
+  const pad = (n) => String(n).padStart(2, '0');
+  const date = valid
+    ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    : String(item.timestamp);
+  return item.source ? `${date} · marked in ${item.source}` : date;
+}
+
+// ---------- processing ----------
+
+// Applies inbox items to the project. Returns what changed, for the context block and user message.
+function applyItems(dir, cfg, items) {
+  const result = { newIds: [], saved: {}, skipped: 0 };
+  if (!items.length) return result;
+
+  const state = readMarks(dir);
+  let marksChanged = false;
+
+  for (const item of items) {
+    if (ACTIVE_TYPES.includes(item.type)) {
+      const existing = state.marks.find((m) => sameText(m.text, item.text));
+      if (existing && existing.type === item.type) {
+        result.skipped++;
+        continue;
+      }
+      if (existing) state.marks = state.marks.filter((m) => m !== existing); // re-marked as the other type
+      const mark = { id: state.nextId++, type: item.type, meta: metaLine(item), text: item.text };
+      state.marks.push(mark);
+      result.newIds.push(mark.id);
+      marksChanged = true;
+    } else if (appendToList(dir, cfg[item.type], item)) {
+      const rel = cfg[item.type];
+      result.saved[rel] = (result.saved[rel] || 0) + 1;
+    } else {
+      result.skipped++;
+    }
+  }
+
+  if (marksChanged) writeMarks(dir, state);
+  return result;
+}
+
+function appendToList(dir, relPath, item) {
+  const file = path.resolve(dir, relPath);
+  let content = '';
+  try {
+    content = fs.readFileSync(file, 'utf8');
+  } catch {
+    content = `${FILE_HEADINGS[item.type]}\n\nItems saved with steerpin.\n`;
+  }
+  const [first, ...rest] = item.text.split('\n');
+  const entry = [`- ${first}`, ...rest.map((l) => (l ? `  ${l}` : '')), `  _${metaLine(item)}_`].join('\n');
+  const body = entry.slice(0, entry.lastIndexOf('\n  _'));
+  if (content.includes(body)) return false;
+  if (!content.endsWith('\n')) content += '\n';
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${content}\n${entry}\n`);
+  return true;
+}
+
+function processInbox(dir, cfg) {
+  const inbox = takeInbox();
+  const result = applyItems(dir, cfg, inbox.items);
+  releaseClaims(inbox.claims);
+  return result;
+}
+
+// ---------- context ----------
+
+function renderContext(marks, result, cfg) {
+  if (!marks.length) return { text: '', truncated: [] };
+  const shown = marks.slice(-cfg.maxActiveMarks);
+  const hidden = marks.length - shown.length;
+  const truncated = [];
+  let budget = MAX_CONTEXT_CHARS;
+
+  const line = (m) => {
+    let t = m.text;
+    if (t.length > cfg.maxMarkLength) {
+      t = `${t.slice(0, cfg.maxMarkLength).trimEnd()} … [truncated, full text in ${MARKS_REL}]`;
+      truncated.push(m.id);
+    }
+    const body = m.type === 'wrong' ? `"${t}"` : t;
+    return `[${m.id}] ${body.replace(/\n/g, '\n    ')}`;
+  };
+
+  const out = ['USER MARKS (set by the user by highlighting text in this chat)'];
+  const priority = shown.filter((m) => m.type === 'priority');
+  const wrong = shown.filter((m) => m.type === 'wrong');
+  const section = (title, list) => {
+    if (!list.length) return;
+    out.push('', title);
+    for (const m of list) {
+      const l = line(m);
+      if (l.length > budget) continue;
+      budget -= l.length;
+      out.push(l);
+    }
+  };
+  section('Priority, keep these at the top of your attention:', priority);
+  section(
+    'Flagged as wrong, do not rely on or repeat these. If anything\nyou said or built depends on them, say so briefly and correct it:',
+    wrong,
+  );
+
+  const notes = [];
+  if (result.newIds.length) {
+    notes.push(`New since last message: ${result.newIds.map((id) => `[${id}]`).join(' ')} (acknowledge these briefly in your reply)`);
+  }
+  if (hidden > 0) notes.push(`${hidden} older mark${hidden === 1 ? '' : 's'} not shown (limit ${cfg.maxActiveMarks}), see ${MARKS_REL}`);
+  if (notes.length) out.push('', ...notes);
+  out.push('', 'The user can list marks with /steerpin:marks and remove them with /steerpin:unmark <id>.');
+  return { text: out.join('\n'), truncated };
+}
+
+function userMessage(result, truncated) {
+  const parts = [];
+  if (result.newIds.length) parts.push(`new mark${result.newIds.length === 1 ? '' : 's'} ${result.newIds.map((id) => `[${id}]`).join(' ')}`);
+  for (const [rel, n] of Object.entries(result.saved)) parts.push(`${n} saved to ${rel}`);
+  const newTruncated = truncated.filter((id) => result.newIds.includes(id));
+  if (newTruncated.length) parts.push(`${newTruncated.map((id) => `[${id}]`).join(' ')} truncated in context (long selection)`);
+  return parts.length ? `steerpin: ${parts.join('; ')}` : '';
+}
+
+// ---------- commands ----------
+
+function readStdin() {
+  try {
+    return fs.readFileSync(0, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function runHook(eventName) {
+  let input = {};
+  try {
+    input = JSON.parse(readStdin() || '{}');
+  } catch {
+    // no usable input; fall back to cwd
+  }
+  const dir = projectDir(input);
+  const cfg = loadConfig(dir);
+  const result = processInbox(dir, cfg);
+  const { marks } = readMarks(dir);
+  const { text, truncated } = renderContext(marks, result, cfg);
+  const message = userMessage(result, truncated);
+  if (!text && !message) return;
+  const output = {};
+  if (text) output.hookSpecificOutput = { hookEventName: eventName, additionalContext: text };
+  if (message) output.systemMessage = message;
+  process.stdout.write(JSON.stringify(output));
+}
+
+function list() {
+  const dir = projectDir();
+  const cfg = loadConfig(dir);
+  const result = processInbox(dir, cfg);
+  const { marks } = readMarks(dir);
+  const message = userMessage(result, []);
+  if (message) console.log(`${message}\n`);
+  if (!marks.length) {
+    console.log('No active marks.');
+    return;
+  }
+  for (const type of ACTIVE_TYPES) {
+    const ofType = marks.filter((m) => m.type === type);
+    if (!ofType.length) continue;
+    console.log(type === 'priority' ? 'Priority:' : 'Wrong:');
+    for (const m of ofType) {
+      console.log(`  [${m.id}] ${m.text.replace(/\n/g, '\n      ')}${m.meta ? `  (${m.meta})` : ''}`);
+    }
+  }
+  if (marks.length > cfg.maxActiveMarks) {
+    console.log(`\nOnly the newest ${cfg.maxActiveMarks} are sent to Claude (maxActiveMarks).`);
+  }
+}
+
+function unmark(args) {
+  const ids = args.join(' ').split(/[\s,]+/).filter(Boolean).map((s) => Number(s.replace(/^\[|\]$/g, '')));
+  if (!ids.length || ids.some((id) => !Number.isInteger(id))) {
+    console.log('Usage: /steerpin:unmark <id> [id...]  (see /steerpin:marks for ids)');
+    process.exitCode = 1;
+    return;
+  }
+  const dir = projectDir();
+  const state = readMarks(dir);
+  const removed = state.marks.filter((m) => ids.includes(m.id));
+  const missing = ids.filter((id) => !removed.some((m) => m.id === id));
+  if (removed.length) {
+    state.marks = state.marks.filter((m) => !ids.includes(m.id));
+    writeMarks(dir, state);
+  }
+  for (const m of removed) console.log(`Removed [${m.id}] ${m.type}: ${m.text.split('\n')[0]}`);
+  if (missing.length) console.log(`No active mark with id ${missing.join(', ')}.`);
+}
+
+function clear() {
+  const dir = projectDir();
+  const state = readMarks(dir);
+  const n = state.marks.length;
+  state.marks = [];
+  writeMarks(dir, state);
+  console.log(n ? `Removed ${n} mark${n === 1 ? '' : 's'}. Roadmap and later files are untouched.` : 'No active marks.');
+}
+
+function parseTypedText(args, usage) {
+  const [type, ...rest] = args;
+  if (!TYPES.includes(type)) {
+    console.log(usage);
+    process.exitCode = 1;
+    return null;
+  }
+  const text = cleanText(rest.length ? rest.join(' ') : process.stdin.isTTY ? '' : readStdin());
+  if (!text) {
+    console.log(usage);
+    process.exitCode = 1;
+    return null;
+  }
+  return { type, text };
+}
+
+function add(args) {
+  const parsed = parseTypedText(args, 'Usage: /steerpin:mark <priority|wrong|roadmap|later> <text>');
+  if (!parsed) return;
+  const dir = projectDir();
+  const cfg = loadConfig(dir);
+  const item = { ...parsed, timestamp: new Date().toISOString(), source: '/steerpin:mark' };
+  const result = applyItems(dir, cfg, [item]);
+  if (result.newIds.length) console.log(`Added [${result.newIds[0]}] ${item.type}. It will be sent with every message until removed.`);
+  else if (Object.keys(result.saved).length) console.log(`Saved to ${cfg[item.type]}.`);
+  else console.log('Already marked, nothing changed.');
+}
+
+function capture(args) {
+  const parsed = parseTypedText(args, 'Usage: steerpin.mjs capture <priority|wrong|roadmap|later> <text>');
+  if (!parsed) return;
+  fs.mkdirSync(HOME, { recursive: true });
+  const line = { ...parsed, timestamp: new Date().toISOString(), source_app: process.env.STEERPIN_SOURCE || 'cli' };
+  fs.appendFileSync(INBOX, JSON.stringify(line) + '\n');
+  console.log(`Marked as ${parsed.type}.`);
+}
+
+const [command, ...args] = process.argv.slice(2);
+try {
+  switch (command) {
+    case 'hook':
+      runHook('UserPromptSubmit');
+      break;
+    case 'session-start':
+      runHook('SessionStart');
+      break;
+    case 'list':
+      list();
+      break;
+    case 'unmark':
+      unmark(args);
+      break;
+    case 'clear':
+      clear();
+      break;
+    case 'add':
+      add(args);
+      break;
+    case 'capture':
+      capture(args);
+      break;
+    default:
+      console.log('Usage: steerpin.mjs <hook|session-start|list|unmark|clear|add|capture> ...');
+      process.exitCode = 1;
+  }
+} catch (err) {
+  // Hooks must never block a message: report and exit 0.
+  if (command === 'hook' || command === 'session-start') {
+    process.stderr.write(`steerpin: ${err.message}\n`);
+    process.exitCode = 0;
+  } else {
+    console.error(`steerpin: ${err.message}`);
+    process.exitCode = 1;
+  }
+}

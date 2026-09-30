@@ -1,0 +1,6 @@
+{
+  "roadmap": "docs/steerpin/roadmap.md",
+  "later": "docs/steerpin/later.md",
+  "maxActiveMarks": 15,
+  "maxMarkLength": 500
+}
