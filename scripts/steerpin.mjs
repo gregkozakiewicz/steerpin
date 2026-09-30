@@ -371,27 +371,6 @@ function carriedOverNotice(source, marks, result) {
   return `steerpin: ${n} mark${n === 1 ? '' : 's'} carried over from an earlier chat (${parts.join(', ')}). Keep going, or run /steerpin:clear-marks to start fresh.`;
 }
 
-// Suggests /steerpin:setup-hotkeys when Hammerspoon is installed but its hotkeys are missing or outdated.
-// Silent when the Steerpin app handles the hotkeys. Never changes anything itself.
-function hotkeyTip() {
-  if (process.platform !== 'darwin') return '';
-  const home = os.homedir();
-  const steerpinApps = process.env.STEERPIN_APP
-    ? [process.env.STEERPIN_APP]
-    : ['/Applications/Steerpin.app', path.join(home, 'Applications/Steerpin.app')];
-  if (steerpinApps.some((app) => fs.existsSync(app))) return '';
-  const apps = ['/Applications/Hammerspoon.app', path.join(home, 'Applications/Hammerspoon.app')];
-  if (!apps.some((app) => fs.existsSync(app))) return '';
-  const bundled = fs.readFileSync(new URL('../macos/hammerspoon/steerpin.lua', import.meta.url), 'utf8');
-  let installed;
-  try {
-    installed = fs.readFileSync(path.join(home, '.hammerspoon/steerpin.lua'), 'utf8');
-  } catch {
-    return 'steerpin: Hammerspoon found. Run /steerpin:setup-hotkeys to turn on the hotkeys.';
-  }
-  return installed === bundled ? '' : 'steerpin: your hotkeys are out of date. Run /steerpin:setup-hotkeys to update them.';
-}
-
 // ---------- commands ----------
 
 function readStdin() {
@@ -416,7 +395,7 @@ function runHook(eventName) {
   const { marks } = readMarks(dir);
   const { text, truncated } = renderContext(marks, result, cfg);
   const carried = eventName === 'SessionStart' ? carriedOverNotice(input.source, marks, result) : '';
-  const message = [userMessage(result, truncated), carried, eventName === 'SessionStart' ? hotkeyTip() : '']
+  const message = [userMessage(result, truncated), carried]
     .filter(Boolean)
     .join('\n');
   if (!text && !message) return;

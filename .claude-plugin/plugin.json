@@ -1,10 +1,10 @@
 {
   "name": "steerpin",
   "description": "Highlight text in Claude Code and mark it Priority or Wrong with a hotkey. Your marks persist across turns, helping Claude stay focused, avoid bad assumptions, and reduce repeated corrections.",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "author": { "name": "Greg Kozakiewicz", "url": "https://github.com/gregkozakiewicz" },
   "homepage": "https://github.com/gregkozakiewicz/steerpin",
   "repository": "https://github.com/gregkozakiewicz/steerpin",
   "license": "MIT",
-  "keywords": ["marks", "context", "hooks", "hammerspoon", "roadmap"]
+  "keywords": ["marks", "context", "hooks", "priority", "roadmap"]
 }

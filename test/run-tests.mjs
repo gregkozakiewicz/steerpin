@@ -196,32 +196,6 @@ test('session-start uses the SessionStart event name', () => {
   assert.equal(out.hookSpecificOutput.hookEventName, 'SessionStart');
 });
 
-test('session-start suggests setting up hotkeys only when needed', () => {
-  const hasHammerspoon = process.platform === 'darwin' && fs.existsSync('/Applications/Hammerspoon.app');
-  const tip = () => {
-    const out = run(['session-start'], '{}');
-    return out ? JSON.parse(out).systemMessage ?? '' : '';
-  };
-  process.env.STEERPIN_APP = path.join(userHome, 'Applications/Steerpin.app'); // app not installed
-  if (!hasHammerspoon) {
-    assert.equal(tip(), '');
-    return;
-  }
-  assert.match(tip(), /Hammerspoon found\. Run \/steerpin:setup-hotkeys/);
-  fs.mkdirSync(path.join(userHome, '.hammerspoon'));
-  fs.writeFileSync(path.join(userHome, '.hammerspoon/steerpin.lua'), '-- old');
-  assert.match(tip(), /out of date/);
-  fs.copyFileSync(path.resolve(import.meta.dirname, '../macos/hammerspoon/steerpin.lua'), path.join(userHome, '.hammerspoon/steerpin.lua'));
-  assert.equal(tip(), '');
-  inbox({ type: 'priority', text: 'p' });
-  assert.equal(JSON.parse(run(['hook'], '{}')).systemMessage, 'steerpin: new mark [1]'); // no tip on normal messages
-
-  fs.rmSync(path.join(userHome, '.hammerspoon'), { recursive: true });
-  fs.mkdirSync(process.env.STEERPIN_APP, { recursive: true });
-  assert.equal(tip(), ''); // the Steerpin app handles hotkeys
-  delete process.env.STEERPIN_APP;
-});
-
 test('.claude/steerpin/ is added to .gitignore once, only in git repos', () => {
   inbox({ type: 'priority', text: 'p' });
   hook();
@@ -275,21 +249,18 @@ test('undo works for /steerpin:mark', () => {
 });
 
 test('a new chat mentions marks carried over; resume and compact stay quiet', () => {
-  process.env.STEERPIN_APP = path.join(project, 'no-app'); // keep the hotkey tip out of the way
   inbox({ type: 'priority', text: 'p' }, { type: 'wrong', text: 'w' });
   hook();
   const start = (source) => {
     const out = run(['session-start'], JSON.stringify({ source }));
     return out ? JSON.parse(out).systemMessage ?? '' : '';
   };
-  const withoutTip = (msg) => msg.split('\n').filter((l) => !/Hammerspoon|hotkeys/.test(l)).join('\n');
-  assert.equal(withoutTip(start('startup')), 'steerpin: 2 marks carried over from an earlier chat (1 priority, 1 wrong). Keep going, or run /steerpin:clear-marks to start fresh.');
+  assert.equal(start('startup'), 'steerpin: 2 marks carried over from an earlier chat (1 priority, 1 wrong). Keep going, or run /steerpin:clear-marks to start fresh.');
   assert.match(start('clear'), /carried over/);
   assert.doesNotMatch(start('resume'), /carried over/);
   assert.doesNotMatch(start('compact'), /carried over/);
   run(['clear']);
   assert.doesNotMatch(start('startup'), /carried over/);
-  delete process.env.STEERPIN_APP;
 });
 
 test('each message moves its project to the top of the recent list', () => {
