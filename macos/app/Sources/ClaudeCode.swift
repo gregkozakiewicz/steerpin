@@ -52,8 +52,13 @@ enum ClaudeCode {
     static func state() -> PluginState {
         guard find("claude") != nil else { return .noCLI }
         guard let installed = installedVersion else { return .notInstalled }
-        return isOlder(installed, than: appVersion) ? .outdated(installed: installed) : .connected
+        guard isOlder(installed, than: appVersion) else { return .connected }
+        // An update already ran and this is the newest plugin published. Don't offer it again.
+        if UserDefaults.standard.string(forKey: latestKey) == installed { return .connected }
+        return .outdated(installed: installed)
     }
+
+    private static let latestKey = "latestPublishedPlugin"
 
     /// Installs the plugin, or updates it when it's already there. Runs off the main thread.
     static func connect(completion: @escaping (_ ok: Bool, _ message: String) -> Void) {
@@ -72,6 +77,9 @@ enum ClaudeCode {
                     let lastLine = result.output.split(separator: "\n").last.map(String.init) ?? "Unknown error"
                     return finish(false, lastLine)
                 }
+            }
+            if updating, let now = installedVersion, isOlder(now, than: appVersion) {
+                UserDefaults.standard.set(now, forKey: latestKey)
             }
             if find("node") == nil {
                 return finish(true, "Also install Node.js 18 or later, which the plugin needs")

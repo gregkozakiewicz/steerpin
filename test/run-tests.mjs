@@ -274,6 +274,24 @@ test('undo works for /steerpin:mark', () => {
   assert.match(run(['undo']), /Removed from \.claude\/steerpin\/later\.md: try biome/);
 });
 
+test('a new chat mentions marks carried over; resume and compact stay quiet', () => {
+  process.env.STEERPIN_APP = path.join(project, 'no-app'); // keep the hotkey tip out of the way
+  inbox({ type: 'priority', text: 'p' }, { type: 'wrong', text: 'w' });
+  hook();
+  const start = (source) => {
+    const out = run(['session-start'], JSON.stringify({ source }));
+    return out ? JSON.parse(out).systemMessage ?? '' : '';
+  };
+  const withoutTip = (msg) => msg.split('\n').filter((l) => !/Hammerspoon|hotkeys/.test(l)).join('\n');
+  assert.equal(withoutTip(start('startup')), 'steerpin: 2 marks carried over from an earlier chat (1 priority, 1 wrong). Keep going, or run /steerpin:clear-marks to start fresh.');
+  assert.match(start('clear'), /carried over/);
+  assert.doesNotMatch(start('resume'), /carried over/);
+  assert.doesNotMatch(start('compact'), /carried over/);
+  run(['clear']);
+  assert.doesNotMatch(start('startup'), /carried over/);
+  delete process.env.STEERPIN_APP;
+});
+
 test('unwritable project fails silently with exit 0', () => {
   inbox({ type: 'priority', text: 'p' });
   fs.mkdirSync(path.join(project, '.claude'));

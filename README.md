@@ -1,3 +1,5 @@
+<img src="macos/app/icon/AppIcon-preview.png" width="96" alt="">
+
 # Steerpin
 
 Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key, and Claude keeps that mark in mind on every message until you remove it.
@@ -9,7 +11,7 @@ Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key
 | `⌥⇧A` | **Add to roadmap** | Nothing. The text is saved to `.claude/steerpin/roadmap.md`, word for word |
 | `⌥⇧S` | **Save for later** | Nothing. The text is saved to `.claude/steerpin/later.md`, word for word |
 
-Marked the wrong thing? `⌥⇧Z` undoes your last mark.
+Marked the wrong thing? `⌥⇧Z` undoes your last mark. Using ChatGPT or Claude.ai? `⌥⇧C` copies your marks to paste into any chat.
 
 `⌥` is Option and `⇧` is Shift. All the keys sit under your left hand.
 
@@ -88,6 +90,16 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 
 - **Before you send your next message:** press `⌥⇧Z` (or pin menu › **Undo Last Mark**). The newest waiting mark is removed, and Claude never sees it.
 - **After you sent it:** run `/steerpin:undo` in Claude Code. It removes what that message delivered, and if a mark replaced an older one (priority re-marked as wrong), it brings the old one back.
+
+### Other chats (ChatGPT, Claude.ai, …)
+
+Chats outside Claude Code can't receive marks automatically, so the app keeps them for you:
+
+1. Mark text with `⌥⇧R` (priority) or `⌥⇧W` (wrong), as usual.
+2. Press `⌥⇧C` (or pin menu › **Copy Marks**).
+3. Paste into your chat with `⌘V`. Claude, ChatGPT or any other assistant gets a short block listing your priorities and what was wrong.
+
+Paste it again whenever the chat starts drifting, or in a new chat. **Clear Chat Marks** in the pin menu starts over.
 
 ### The menu bar app
 
@@ -207,6 +219,7 @@ Each project folder has its own set. Opening Claude Code in a different folder s
 
 ## Good to know
 
+- **New chat, same project.** Marks belong to the project folder, so a new chat starts with the old ones. You'll see `steerpin: 3 marks carried over from an earlier chat…`. Keep going if you're continuing the same work, or run `/steerpin:clear-marks` to start fresh.
 - **Two Claude Code sessions open at once.** The hotkeys don't know which project you're in. Marks go to whichever session you send the next message in.
 - **Marking while Claude is still answering** is fine. The marks arrive with your next message.
 - **Marking the same text twice** does nothing. Marking it with a different type (priority, then wrong) replaces the old mark.

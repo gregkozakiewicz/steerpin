@@ -1,7 +1,7 @@
 {
   "name": "steerpin",
   "description": "Mark text in a Claude Code chat as priority, wrong, or roadmap with a hotkey. Claude sees your marks on every turn until you remove them.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "author": { "name": "Greg Kozakiewicz", "url": "https://github.com/gregkozakiewicz" },
   "homepage": "https://github.com/gregkozakiewicz/steerpin",
   "repository": "https://github.com/gregkozakiewicz/steerpin",

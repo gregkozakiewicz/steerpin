@@ -334,6 +334,20 @@ function userMessage(result, truncated) {
   return parts.length ? `steerpin: ${parts.join('; ')}` : '';
 }
 
+// Marks belong to the project, so a brand-new chat inherits them. Say so, so the user can start fresh.
+// Resumed and compacted chats are continuations and stay quiet.
+function carriedOverNotice(source, marks, result) {
+  if (source !== 'startup' && source !== 'clear') return '';
+  const old = marks.filter((m) => !result.newIds.includes(m.id));
+  if (!old.length) return '';
+  const count = (type) => old.filter((m) => m.type === type).length;
+  const parts = [];
+  if (count('priority')) parts.push(`${count('priority')} priority`);
+  if (count('wrong')) parts.push(`${count('wrong')} wrong`);
+  const n = old.length;
+  return `steerpin: ${n} mark${n === 1 ? '' : 's'} carried over from an earlier chat (${parts.join(', ')}). Keep going, or run /steerpin:clear-marks to start fresh.`;
+}
+
 // Suggests /steerpin:setup-hotkeys when Hammerspoon is installed but its hotkeys are missing or outdated.
 // Silent when the Steerpin app handles the hotkeys. Never changes anything itself.
 function hotkeyTip() {
@@ -377,7 +391,8 @@ function runHook(eventName) {
   const result = processInbox(dir, cfg);
   const { marks } = readMarks(dir);
   const { text, truncated } = renderContext(marks, result, cfg);
-  const message = [userMessage(result, truncated), eventName === 'SessionStart' ? hotkeyTip() : '']
+  const carried = eventName === 'SessionStart' ? carriedOverNotice(input.source, marks, result) : '';
+  const message = [userMessage(result, truncated), carried, eventName === 'SessionStart' ? hotkeyTip() : '']
     .filter(Boolean)
     .join('\n');
   if (!text && !message) return;

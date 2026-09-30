@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pluginState: ClaudeCode.PluginState?
     private var connecting = false
     private var undoAvailable = true
+    private var copyAvailable = true
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu()
@@ -28,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         undoAvailable = hotKeys.register(id: 99, keyCode: UInt32(kVK_ANSI_Z)) { [weak self] in
             self?.undoLastMark()
+        }
+        copyAvailable = hotKeys.register(id: 98, keyCode: UInt32(kVK_ANSI_C)) { [weak self] in
+            self?.copyMarks()
         }
 
         updateIcon()
@@ -67,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                            title: "Couldn't save the mark", detail: error.localizedDescription)
                 return
             }
+            ChatMarks.add(type, text)
             self.recent.insert(mark, at: 0)
             self.recent = Array(self.recent.prefix(10))
             self.flash(symbol: type.symbol, tint: self.tint(type), title: type.confirmation, detail: text)
@@ -80,11 +85,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                   detail: "Already sent to Claude? Run /steerpin:undo in Claude Code")
             return
         }
+        ChatMarks.remove(removed.type, removed.text)
         if let index = recent.firstIndex(where: { $0.type == removed.type && $0.text == removed.text }) {
             recent.remove(at: index)
         }
         flash(symbol: "arrow.uturn.backward.circle.fill", tint: .systemOrange,
               title: "Undid \(removed.type.name.lowercased()) mark", detail: removed.text)
+    }
+
+    @objc private func copyMarks() {
+        guard let block = ChatMarks.block() else {
+            flash(symbol: "doc.on.clipboard", tint: .secondaryLabelColor, title: "No marks to copy",
+                  detail: "Mark text with ⌥⇧R or ⌥⇧W first")
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(block, forType: .string)
+        let n = ChatMarks.load().count
+        flash(symbol: "doc.on.clipboard.fill", tint: .systemBlue,
+              title: "Copied \(n) mark\(n == 1 ? "" : "s")", detail: "Paste into any chat with ⌘V")
+    }
+
+    @objc private func clearChatMarks() {
+        ChatMarks.clear()
+        flash(symbol: "trash.circle.fill", tint: .secondaryLabelColor, title: "Chat marks cleared",
+              detail: "Copy Marks starts empty again")
     }
 
     private func tint(_ type: MarkType) -> NSColor {
@@ -208,6 +233,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let undoItem = info("⌥⇧Z   Undo last mark\(undoAvailable ? "" : " (used by another app)")")
         undoItem.image = NSImage(systemSymbolName: "arrow.uturn.backward.circle.fill", accessibilityDescription: nil)
         menu.addItem(undoItem)
+        let copyItem = info("⌥⇧C   Copy marks for any chat\(copyAvailable ? "" : " (used by another app)")")
+        copyItem.image = NSImage(systemSymbolName: "doc.on.clipboard.fill", accessibilityDescription: nil)
+        menu.addItem(copyItem)
 
         menu.addItem(.separator())
         let pending = Inbox.pendingCount()
@@ -233,6 +261,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         undoAction.isEnabled = pending > 0
         menu.addItem(undoAction)
         menu.addItem(item("Open Inbox Folder", #selector(openInbox)))
+
+        menu.addItem(.separator())
+        menu.addItem(header("Other chats (ChatGPT, Claude.ai…)"))
+        let chatCount = ChatMarks.load().count
+        let copyAction = item(chatCount == 0 ? "Copy Marks" : "Copy \(chatCount) Mark\(chatCount == 1 ? "" : "s")", #selector(copyMarks))
+        copyAction.isEnabled = chatCount > 0
+        menu.addItem(copyAction)
+        let clearAction = item("Clear Chat Marks", #selector(clearChatMarks))
+        clearAction.isEnabled = chatCount > 0
+        menu.addItem(clearAction)
 
         menu.addItem(.separator())
         menu.addItem(header("Claude Code"))
