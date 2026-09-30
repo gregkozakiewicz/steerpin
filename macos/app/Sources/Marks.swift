@@ -81,6 +81,22 @@ enum Inbox {
         try handle.write(contentsOf: line)
     }
 
+    /// Removes the newest waiting mark. Returns nil when the inbox is empty,
+    /// which means the marks were already delivered to Claude Code.
+    static func removeLast() -> (type: MarkType, text: String)? {
+        guard let content = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+        var lines = content.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        guard let last = lines.popLast() else { return nil }
+        let rest = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
+        try? rest.write(to: file, atomically: true, encoding: .utf8)
+        guard let data = last.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = MarkType(rawValue: json["type"] as? String ?? ""),
+              let text = json["text"] as? String
+        else { return nil }
+        return (type, text)
+    }
+
     /// Marks waiting for the next Claude Code message.
     static func pendingCount() -> Int {
         guard let content = try? String(contentsOf: file, encoding: .utf8) else { return 0 }

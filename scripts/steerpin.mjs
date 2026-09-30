@@ -6,6 +6,7 @@
 //   steerpin.mjs list             process the inbox, then print active marks
 //   steerpin.mjs unmark <id...>   remove marks by id
 //   steerpin.mjs clear            remove all priority and wrong marks
+//   steerpin.mjs undo             take back what the last message delivered
 //   steerpin.mjs add <type> [text]      mark text directly (text from args or stdin)
 //   steerpin.mjs capture <type> [text]  append to the global inbox (for other hotkey tools)
 
@@ -21,6 +22,7 @@ const CLAIM_PREFIX = 'inbox.jsonl.claim-';
 const STALE_CLAIM_MS = 30_000;
 const MARKS_REL = '.claude/steerpin/marks.md';
 const CONFIG_REL = '.claude/steerpin/config.json';
+const UNDO_REL = '.claude/steerpin/last-delivery.json';
 const IGNORE_LINE = '.claude/steerpin/';
 const MAX_CONTEXT_CHARS = 9000;
 const DEFAULTS = {
@@ -190,6 +192,7 @@ function applyItems(dir, cfg, items) {
 
   const state = readMarks(dir);
   let marksChanged = false;
+  const undo = [];
 
   for (const item of items) {
     if (ACTIVE_TYPES.includes(item.type)) {
@@ -202,16 +205,22 @@ function applyItems(dir, cfg, items) {
       const mark = { id: state.nextId++, type: item.type, meta: metaLine(item), text: item.text };
       state.marks.push(mark);
       result.newIds.push(mark.id);
+      undo.push({ kind: 'mark', id: mark.id, replaced: existing ?? null });
       marksChanged = true;
-    } else if (appendToList(dir, cfg[item.type], item)) {
-      const rel = cfg[item.type];
-      result.saved[rel] = (result.saved[rel] || 0) + 1;
     } else {
-      result.skipped++;
+      const rel = cfg[item.type];
+      const entry = appendToList(dir, rel, item);
+      if (entry) {
+        result.saved[rel] = (result.saved[rel] || 0) + 1;
+        undo.push({ kind: 'list', type: item.type, file: rel, entry });
+      } else {
+        result.skipped++;
+      }
     }
   }
 
   if (marksChanged) writeMarks(dir, state);
+  if (undo.length) writeAtomic(path.join(dir, UNDO_REL), JSON.stringify(undo, null, 2) + '\n');
   if (marksChanged || Object.keys(result.saved).length) result.gitignored = ensureGitignore(dir);
   return result;
 }
@@ -247,11 +256,11 @@ function appendToList(dir, relPath, item) {
   const [first, ...rest] = item.text.split('\n');
   const entry = [`- ${first}`, ...rest.map((l) => (l ? `  ${l}` : '')), `  _${metaLine(item)}_`].join('\n');
   const body = entry.slice(0, entry.lastIndexOf('\n  _'));
-  if (content.includes(body)) return false;
+  if (content.includes(body)) return null;
   if (!content.endsWith('\n')) content += '\n';
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${content}\n${entry}\n`);
-  return true;
+  return entry;
 }
 
 function processInbox(dir, cfg) {
@@ -430,6 +439,46 @@ function clear() {
   console.log(n ? `Removed ${n} mark${n === 1 ? '' : 's'}. Roadmap and later files are untouched.` : 'No active marks.');
 }
 
+function undo() {
+  const dir = projectDir();
+  const file = path.join(dir, UNDO_REL);
+  let steps;
+  try {
+    steps = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    console.log('Nothing to undo.');
+    return;
+  }
+  const state = readMarks(dir);
+  const done = [];
+  for (const step of steps) {
+    if (step.kind === 'mark') {
+      const mark = state.marks.find((m) => m.id === step.id);
+      if (!mark) continue;
+      state.marks = state.marks.filter((m) => m !== mark);
+      if (step.replaced) state.marks.push(step.replaced);
+      done.push(`Removed [${mark.id}] ${mark.type}: ${mark.text.split('\n')[0]}`);
+      if (step.replaced) done.push(`Restored [${step.replaced.id}] ${step.replaced.type}`);
+    } else {
+      const listFile = path.resolve(dir, step.file);
+      let content;
+      try {
+        content = fs.readFileSync(listFile, 'utf8');
+      } catch {
+        continue;
+      }
+      const at = content.lastIndexOf(`\n${step.entry}\n`);
+      if (at === -1) continue;
+      fs.writeFileSync(listFile, content.slice(0, at) + content.slice(at + step.entry.length + 1));
+      done.push(`Removed from ${step.file}: ${step.entry.slice(2).split('\n')[0]}`);
+    }
+  }
+  state.marks.sort((a, b) => a.id - b.id);
+  writeMarks(dir, state);
+  fs.rmSync(file, { force: true });
+  console.log(done.length ? done.join('\n') : 'Nothing to undo: those marks were already removed.');
+}
+
 function parseTypedText(args, usage) {
   const [type, ...rest] = args;
   if (!TYPES.includes(type)) {
@@ -486,6 +535,9 @@ try {
     case 'clear':
       clear();
       break;
+    case 'undo':
+      undo();
+      break;
     case 'add':
       add(args);
       break;
@@ -493,7 +545,7 @@ try {
       capture(args);
       break;
     default:
-      console.log('Usage: steerpin.mjs <hook|session-start|list|unmark|clear|add|capture> ...');
+      console.log('Usage: steerpin.mjs <hook|session-start|list|unmark|clear|undo|add|capture> ...');
       process.exitCode = 1;
   }
 } catch (err) {

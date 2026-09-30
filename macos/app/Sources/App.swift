@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -10,10 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var accessTimer: Timer?
     private var pluginState: ClaudeCode.PluginState?
     private var connecting = false
+    private var undoAvailable = true
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu()
         menu.delegate = self
+        menu.autoenablesItems = false
         statusItem.menu = menu
 
         for (index, type) in MarkType.allCases.enumerated() {
@@ -22,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self?.capture(type) }
             }
             if !ok { unavailable.insert(type) }
+        }
+        undoAvailable = hotKeys.register(id: 99, keyCode: UInt32(kVK_ANSI_Z)) { [weak self] in
+            self?.undoLastMark()
         }
 
         updateIcon()
@@ -65,6 +71,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.recent = Array(self.recent.prefix(10))
             self.flash(symbol: type.symbol, tint: self.tint(type), title: type.confirmation, detail: text)
         }
+    }
+
+    @objc private func undoLastMark() {
+        guard let removed = Inbox.removeLast() else {
+            flash(symbol: "arrow.uturn.backward.circle.fill", tint: .secondaryLabelColor,
+                  title: "Nothing waiting to undo",
+                  detail: "Already sent to Claude? Run /steerpin:undo in Claude Code")
+            return
+        }
+        if let index = recent.firstIndex(where: { $0.type == removed.type && $0.text == removed.text }) {
+            recent.remove(at: index)
+        }
+        flash(symbol: "arrow.uturn.backward.circle.fill", tint: .systemOrange,
+              title: "Undid \(removed.type.name.lowercased()) mark", detail: removed.text)
     }
 
     private func tint(_ type: MarkType) -> NSColor {
@@ -185,6 +205,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(entry)
         }
 
+        let undoItem = info("⌥⇧Z   Undo last mark\(undoAvailable ? "" : " (used by another app)")")
+        undoItem.image = NSImage(systemSymbolName: "arrow.uturn.backward.circle.fill", accessibilityDescription: nil)
+        menu.addItem(undoItem)
+
         menu.addItem(.separator())
         let pending = Inbox.pendingCount()
         menu.addItem(info(pending == 0
@@ -205,6 +229,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         recentItem.submenu = recentMenu
         menu.addItem(recentItem)
+        let undoAction = item("Undo Last Mark", #selector(undoLastMark))
+        undoAction.isEnabled = pending > 0
+        menu.addItem(undoAction)
         menu.addItem(item("Open Inbox Folder", #selector(openInbox)))
 
         menu.addItem(.separator())

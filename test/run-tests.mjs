@@ -246,6 +246,34 @@ test('an existing .claude ignore rule is respected', () => {
   assert.equal(read('.gitignore'), '/.claude/*\n');
 });
 
+test('undo takes back the last delivery only', () => {
+  inbox({ type: 'priority', text: 'keep' });
+  hook();
+  inbox({ type: 'wrong', text: 'oops' }, { type: 'roadmap', text: 'idea' });
+  hook();
+  const out = run(['undo']);
+  assert.match(out, /Removed \[2\] wrong: oops/);
+  assert.match(out, /Removed from \.claude\/steerpin\/roadmap\.md: idea/);
+  assert.doesNotMatch(read('.claude/steerpin/roadmap.md'), /idea/);
+  assert.match(context(hook()), /\[1\] keep/);
+  assert.doesNotMatch(context(hook()), /oops/);
+  assert.match(run(['undo']), /Nothing to undo/);
+});
+
+test('undo restores a mark that was re-marked as another type', () => {
+  inbox({ type: 'priority', text: 'X' });
+  hook();
+  inbox({ type: 'wrong', text: 'X' });
+  hook();
+  assert.match(run(['undo']), /Restored \[1\] priority/);
+  assert.match(context(hook()), /Priority[\s\S]*\[1\] X/);
+});
+
+test('undo works for /steerpin:mark', () => {
+  run(['add', 'later'], 'try biome');
+  assert.match(run(['undo']), /Removed from \.claude\/steerpin\/later\.md: try biome/);
+});
+
 test('unwritable project fails silently with exit 0', () => {
   inbox({ type: 'priority', text: 'p' });
   fs.mkdirSync(path.join(project, '.claude'));
