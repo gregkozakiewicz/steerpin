@@ -3,18 +3,32 @@
   <img src="assets/steerpin-logo.png" width="180" alt="Steerpin">
 </picture>
 
-Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key, and Claude keeps that mark in mind on every message until you remove it.
+Highlight text in Claude Code and mark it Priority or Wrong with a hotkey. Your marks persist across turns, helping Claude stay focused, avoid bad assumptions, and reduce repeated corrections.
+
+**Steer Claude.** Sent with every message until you remove them:
+
+| Keys | Mark | What Claude does |
+|---|---|---|
+| `⌥⇧R` | **Priority** | Keeps it at the top of its attention, every turn |
+| `⌥⇧W` | **Wrong** | Stops relying on it, and corrects anything built on it |
+
+**Save notes.** Written to your project, word for word. Claude doesn't see them:
+
+| Keys | Mark | Saved to |
+|---|---|---|
+| `⌥⇧A` | **Add to roadmap** | `.claude/steerpin/roadmap.md` |
+| `⌥⇧S` | **Save for later** | `.claude/steerpin/later.md` |
+
+**Manage:**
 
 | Keys | Action | What happens |
 |---|---|---|
-| `⌥⇧R` | **Priority** | Claude keeps it at the top of its attention, every turn |
-| `⌥⇧W` | **Wrong** | Claude stops relying on it, and corrects anything built on it |
-| `⌥⇧A` | **Add to roadmap** | The text is saved to `.claude/steerpin/roadmap.md`, word for word |
-| `⌥⇧S` | **Save for later** | The text is saved to `.claude/steerpin/later.md`, word for word |
 | `⌥⇧Z` | **Undo** | Removes your last mark before it's sent |
 | `⌥⇧C` | **Copy marks** | Copies the priority and wrong marks of your most recent project, to paste anywhere |
 
 `⌥` is Option and `⇧` is Shift. All the keys sit under your left hand.
+
+**Works in Claude Code:** in the terminal, or in the Code tab of the Claude desktop app. Not in Claude chat (claude.ai, the desktop app's Chat tab) or Cowork, which can't receive marks automatically. There you can paste them with `⌥⇧C`.
 
 **Why:** in long sessions, important points drift out of focus and wrong statements get reused as fact. The chat has no way to mark text, and plugins can't add buttons to it. So Steerpin marks text with system-wide hotkeys, and a Claude Code hook passes the marks to Claude. They survive long chats and `/compact`.
 
@@ -34,12 +48,13 @@ Steerpin is a small menu bar app. It owns the hotkeys, copies your selection, pu
 
 ### Step 2: open it
 
-The app isn't signed with a paid Apple developer account, so the first time you open it macOS says it can't verify it:
+The app isn't signed with a paid Apple developer account, so the first time you open it macOS shows **"Steerpin" Not Opened**:
 
-1. Click **Done** (not Move to Trash).
-2. Open **System Settings › Privacy & Security**, scroll down to the message about Steerpin, and click **Open Anyway**. Confirm with your password or Touch ID.
+1. Click **Done**, not Move to Bin. Nothing else happens yet; that's expected.
+2. Open **System Settings › Privacy & Security** and scroll all the way down to **Security**. Next to *"Steerpin" was blocked to protect your Mac*, click **Open Anyway**, and confirm with your password or Touch ID.
+3. macOS asks one last time, now with an **Open Anyway** button. Click it, and Steerpin starts.
 
-You only do this once.
+You only do this once. If you don't see the "was blocked" line, open Steerpin from Applications again, click **Done**, and look again.
 
 ### Step 3: allow Accessibility
 
@@ -94,7 +109,7 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 
 ### Projects in the menu
 
-The pin menu lists your 5 most recent Claude Code projects that have marks, newest first, with how many priority and wrong marks each has. Each project has its own menu:
+The pin menu lists your 5 most recent Claude Code projects that have marks, newest first, with how many priority and wrong marks each has. A project you've just cleared stays in the list, marked **cleared**, so you can still undo. Each project has its own menu:
 
 | Menu item | What it does |
 |---|---|
@@ -109,7 +124,16 @@ The menu reads the same files Claude sees, so it always matches what Claude has.
 
 ### The menu bar app
 
-Click the pin icon to mark text by clicking instead of using the shortcuts, or to see how many marks are waiting for your next message, your recent marks, the Claude Code connection, **Launch at Login**, and **Quit**. When a newer Claude Code plugin is published, the app offers **Update Plugin**. A crossed-out pin means Accessibility access is off.
+Click the pin icon to:
+
+- mark selected text by clicking **Priority**, **Wrong**, **Add to roadmap** or **Save for later**, instead of using the shortcuts
+- see how many marks are waiting for your next message, and your recent marks
+- work with your **Projects** (above)
+- check the **Claude Code** connection. When a newer plugin is published, it offers **Update Plugin**.
+- turn on **Launch at Login**
+- quit. The **Quit Steerpin** item also shows which version you have.
+
+A crossed-out pin means Accessibility access is off.
 
 ### Commands
 
@@ -120,7 +144,6 @@ Click the pin icon to mark text by clicking instead of using the shortcuts, or t
 | `/steerpin:clear-marks` | Remove all priority and wrong marks. Roadmap and later files are not touched |
 | `/steerpin:undo` | Take back everything your last message delivered: marks, roadmap and later items |
 | `/steerpin:mark wrong <text>` | Mark text without a hotkey. Also `priority`, `roadmap`, `later` |
-| `/steerpin:setup-hotkeys` | Only for the [Hammerspoon alternative](#alternative-hammerspoon) |
 
 ## Troubleshooting
 
@@ -128,7 +151,7 @@ Click the pin icon to mark text by clicking instead of using the shortcuts, or t
 - Check that Steerpin is running: the pin icon should be in the menu bar. If not, open it from Applications.
 - If the pin is crossed out, click it › **Allow Accessibility Access…** and turn Steerpin on.
 - If Accessibility looks on but the pin stays crossed out, macOS is holding an outdated entry. This can happen once when updating from 0.2.1 or earlier. Run `tccutil reset Accessibility com.gregkozakiewicz.steerpin` in Terminal, then allow Steerpin again.
-- Click the pin icon. If a shortcut says **(used by another app)**, another app has taken that key combination. Quit that app, then quit and reopen Steerpin.
+- Click the pin icon. If a mark says **(shortcut used by another app)**, another app has taken that key combination. Quit that app, then quit and reopen Steerpin.
 
 **I can't see the pin icon.**
 Open Steerpin again from Applications or Spotlight. A window confirms it's running and can open **System Settings › Menu Bar**, where Steerpin must be switched on under **Allow in the Menu Bar**. If it's on, your menu bar is probably full: macOS hides icons that don't fit, especially next to the camera notch. The same window can also quit Steerpin.
@@ -144,26 +167,6 @@ Select the text again and press the key while the selection is still highlighted
 
 **My clipboard changed.**
 It shouldn't: Steerpin puts back whatever you had copied. If it happens, tell us in an [issue](https://github.com/gregkozakiewicz/steerpin/issues) which app you were marking from.
-
-## Alternative: Hammerspoon
-
-If you already use [Hammerspoon](https://www.hammerspoon.org), you can run the hotkeys there instead of the app. Don't run both: they use the same shortcuts.
-
-1. Install Hammerspoon (`brew install --cask hammerspoon`), open it, and turn it on in **System Settings › Privacy & Security › Accessibility**.
-2. In Claude Code, run `/steerpin:setup-hotkeys`. It adds the Steerpin script to `~/.hammerspoon/` and restarts Hammerspoon. Your existing Hammerspoon config stays as it is.
-
-When a plugin update changes the hotkeys, a session-start message reminds you to run `/steerpin:setup-hotkeys` again.
-
-To change keys, replace `require("steerpin")` in `~/.hammerspoon/init.lua` with, for example:
-
-```lua
-require("steerpin").setup({
-  keys = {
-    priority = { { "ctrl", "alt" }, "r" },
-    later = false, -- turns this key off
-  },
-})
-```
 
 ## Installing the plugin by hand
 
@@ -210,17 +213,25 @@ Optional, per project, in `.claude/steerpin/config.json`. Anything you leave out
 
 ## Where things are saved
 
-Everything stays private to you, in one folder per project:
+Everything stays private to you. In each project, in `.claude/steerpin/`:
 
-| Path | What | Cleared by `/steerpin:clear-marks`? |
+| File | What | Removed by **Clear Priority and Wrong Marks**? |
 |---|---|---|
-| `.claude/steerpin/marks.md` | Active priority and wrong marks | Yes |
-| `.claude/steerpin/roadmap.md` | Roadmap items | No |
-| `.claude/steerpin/later.md` | Save-for-later items | No |
-| `.claude/steerpin/config.json` | Optional [settings](#settings) | No |
-| `~/.steerpin/inbox.jsonl` | Where the hotkeys write, in your home folder. Emptied on your next message | |
+| `marks.md` | Active priority and wrong marks | Yes |
+| `roadmap.md` | Roadmap items | No |
+| `later.md` | Save-for-later items | No |
+| `config.json` | Optional [settings](#settings) | No |
+| `cleared.md`, `cleared-inbox.jsonl` | The marks from your last clear, so **Undo Clear** can bring them back | Replaced by the next clear |
+| `last-delivery.json` | What your last message delivered, so `/steerpin:undo` can take it back | No |
 
-All of these are plain Markdown or JSON, so you can open and edit them by hand.
+In your home folder, in `~/.steerpin/`:
+
+| File | What |
+|---|---|
+| `inbox.jsonl` | Marks waiting for your next message. Emptied when you send it |
+| `projects.json` | Your recent Claude Code projects, for the pin menu |
+
+All of these are plain Markdown or JSON, so you can open and edit them by hand. (`/steerpin:clear-marks` in Claude Code does the same as the menu's Clear, without the undo.)
 
 The first time Steerpin saves something in a git repository, it adds `.claude/steerpin/` to the project's `.gitignore` and tells you once. Your marks, roadmap and later items are never committed unless you change that.
 
