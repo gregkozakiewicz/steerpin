@@ -102,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             self.recent.insert(mark, at: 0)
             self.recent = Array(self.recent.prefix(10))
-            self.flash(symbol: type.symbol, tint: self.tint(type), title: type.confirmation, detail: text)
+            self.flash(symbol: type.symbol, tint: self.tint(type), title: type.confirmation)
         }
     }
 
@@ -117,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             recent.remove(at: index)
         }
         flash(symbol: "arrow.uturn.backward.circle.fill", tint: .systemOrange,
-              title: "Undid \(removed.type.name.lowercased()) mark", detail: removed.text)
+              title: "Undid \(removed.type.name.lowercased()) mark")
     }
 
     // MARK: Projects
@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSPasteboard.general.setString(block, forType: .string)
         let n = project.count(list)
         flash(symbol: "doc.on.clipboard.fill", tint: .systemBlue,
-              title: "Copied \(n) \(name)\(n == 1 ? "" : "s")", detail: "From \(project.name). Paste anywhere with ⌘V")
+              title: "Copied \(n) \(name)\(n == 1 ? "" : "s")")
     }
 
     @objc private func openMarksFile(_ sender: NSMenuItem) {
@@ -179,15 +179,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let cleared = project.clearSteering()
         flash(symbol: "trash.circle.fill", tint: .secondaryLabelColor,
-              title: "Cleared \(cleared) mark\(cleared == 1 ? "" : "s")",
-              detail: "From \(project.name). Undo from the menu if you need them back.")
+              title: "Cleared \(cleared) mark\(cleared == 1 ? "" : "s") from \(project.name)")
     }
 
     @objc private func undoClearFromMenu(_ sender: NSMenuItem) {
         guard let project = project(for: sender) else { return }
         project.undoClear()
-        flash(symbol: "arrow.uturn.backward.circle.fill", tint: .systemOrange, title: "Marks restored",
-              detail: "\(project.count(.steering)) priority and wrong marks in \(project.name)")
+        flash(symbol: "arrow.uturn.backward.circle.fill", tint: .systemOrange, title: "Marks restored in \(project.name)")
     }
 
     private func projectMenu(_ project: Project) -> NSMenu {
@@ -256,9 +254,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func flash(symbol: String, tint: NSColor, title: String, detail: String) {
+    /// Confirmations are title only; `detail` is a hint for popups that tell the user what to do.
+    private func flash(symbol: String, tint: NSColor, title: String, detail: String? = nil) {
         let anchor = statusItem.button?.window?.frame
-        hud.show(symbol: symbol, tint: tint, title: title, detail: detail, below: anchor)
+        hud.show(symbol: symbol, tint: tint, title: title, hint: detail, below: anchor)
     }
 
     // MARK: Accessibility
@@ -322,7 +321,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !connecting else { return }
         connecting = true
         flash(symbol: "arrow.triangle.2.circlepath", tint: .systemBlue,
-              title: "Connecting to Claude Code…", detail: "Installing the Steerpin plugin")
+              title: "Connecting to Claude Code…")
         ClaudeCode.connect { [weak self] ok, message in
             guard let self else { return }
             self.connecting = false
@@ -338,8 +337,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showConnection() {
-        flash(symbol: "checkmark.circle.fill", tint: .systemGreen, title: "Connected to Claude Code",
-              detail: "Steerpin plugin \(ClaudeCode.installedVersion ?? "") is installed")
+        flash(symbol: "checkmark.circle.fill", tint: .systemGreen,
+              title: "Connected · plugin \(ClaudeCode.installedVersion ?? "")")
     }
 
     @objc private func getClaudeCode() {
