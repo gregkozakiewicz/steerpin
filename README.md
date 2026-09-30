@@ -62,17 +62,13 @@ Then quit and reopen Claude Code so the plugin loads.
 
 ### Step 3: add the Steerpin hotkeys
 
-Download this repo and run the installer:
+In Claude Code, run:
 
-```bash
-git clone https://github.com/gregkozakiewicz/steerpin.git ~/steerpin
+```
+/steerpin:setup-hotkeys
 ```
 
-```bash
-~/steerpin/macos/install-hammerspoon.sh
-```
-
-This copies `steerpin.lua` into `~/.hammerspoon/` and loads it from your `~/.hammerspoon/init.lua`. Any Hammerspoon config you already have stays as it is.
+This copies the hotkey script into `~/.hammerspoon/` and loads it from your `~/.hammerspoon/init.lua`. Any Hammerspoon config you already have stays as it is.
 
 Then click the hammer icon in the menu bar › **Reload Config**. When macOS asks whether Hammerspoon can send notifications, click **Allow**.
 
@@ -118,6 +114,7 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 | `/steerpin:unmark 3` | Remove mark 3. Several at once: `/steerpin:unmark 3 5` |
 | `/steerpin:clear-marks` | Remove all priority and wrong marks. Roadmap and later files are not touched |
 | `/steerpin:mark wrong <text>` | Mark text without a hotkey. Also `priority`, `roadmap`, `later` |
+| `/steerpin:setup-hotkeys` | Install or update the Hammerspoon hotkeys |
 
 ## Troubleshooting
 
@@ -153,7 +150,7 @@ require("steerpin").setup({
 })
 ```
 
-Keys you don't list keep their defaults. Reload Config afterwards.
+Keys you don't list keep their defaults. Reload Config afterwards. Running `/steerpin:setup-hotkeys` again won't undo your changes.
 
 ## Without hotkeys
 
@@ -166,7 +163,7 @@ On Linux or Windows, or if you'd rather not use Hammerspoon, mark text inside Cl
 Other hotkey tools (Raycast, Keyboard Maestro, AutoHotkey) can write to the same inbox by running:
 
 ```bash
-node ~/steerpin/scripts/steerpin.mjs capture wrong "the selected text"
+node ~/.claude/plugins/marketplaces/steerpin/scripts/steerpin.mjs capture wrong "the selected text"
 ```
 
 ## Settings
