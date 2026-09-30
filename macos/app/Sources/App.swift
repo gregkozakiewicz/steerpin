@@ -34,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.copySteering()
         }
 
+        // The app used to keep its own copy lists; the project files replaced them.
+        try? FileManager.default.removeItem(at: Inbox.folder.appendingPathComponent("chat-marks.json"))
+
         updateIcon()
         if Selection.hasAccess {
             offerToConnect()
@@ -71,7 +74,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                            title: "Couldn't save the mark", detail: error.localizedDescription)
                 return
             }
-            MarkLists.add(type, text)
             self.recent.insert(mark, at: 0)
             self.recent = Array(self.recent.prefix(10))
             self.flash(symbol: type.symbol, tint: self.tint(type), title: type.confirmation, detail: text)
@@ -85,7 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                   detail: "Already sent to Claude? Run /steerpin:undo in Claude Code")
             return
         }
-        MarkLists.remove(removed.type, removed.text)
         if let index = recent.firstIndex(where: { $0.type == removed.type && $0.text == removed.text }) {
             recent.remove(at: index)
         }
@@ -107,13 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSPasteboard.general.setString(block, forType: .string)
         let n = MarkLists.count(list)
         flash(symbol: "doc.on.clipboard.fill", tint: .systemBlue,
-              title: "Copied \(n) \(name)\(n == 1 ? "" : "s")", detail: "Paste anywhere with ⌘V")
-    }
-
-    @objc private func clearLists() {
-        MarkLists.clear()
-        flash(symbol: "trash.circle.fill", tint: .secondaryLabelColor, title: "Lists cleared",
-              detail: "Copy starts empty again. Your project files are untouched.")
+              title: "Copied \(n) \(name)\(n == 1 ? "" : "s")",
+              detail: "From \(MarkLists.projectName ?? "your project"). Paste anywhere with ⌘V")
     }
 
     private func tint(_ type: MarkType) -> NSColor {
@@ -231,23 +227,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        menu.addItem(header("Select text, then press"))
+        let pending = Inbox.pendingCount()
+        menu.addItem(header("Select text, then click or press"))
         for type in MarkType.allCases {
-            let suffix = unavailable.contains(type) ? " (used by another app)" : ""
-            let entry = info("\(type.shortcut)   \(type.name)\(suffix)")
+            let suffix = unavailable.contains(type) ? " (shortcut used by another app)" : ""
+            let entry = item("\(type.name)\(suffix)", #selector(markFromMenu(_:)))
+            entry.representedObject = type.rawValue
             entry.image = NSImage(systemSymbolName: type.symbol, accessibilityDescription: nil)
+            if !unavailable.contains(type) { shortcut(entry, type.keyCode) }
             menu.addItem(entry)
         }
-
-        let undoItem = info("⌥⇧Z   Undo last mark\(undoAvailable ? "" : " (used by another app)")")
-        undoItem.image = NSImage(systemSymbolName: "arrow.uturn.backward.circle.fill", accessibilityDescription: nil)
-        menu.addItem(undoItem)
-        let copyItem = info("⌥⇧C   Copy priority & wrong marks\(copyAvailable ? "" : " (used by another app)")")
-        copyItem.image = NSImage(systemSymbolName: "doc.on.clipboard.fill", accessibilityDescription: nil)
-        menu.addItem(copyItem)
+        let undoEntry = item("Undo Last Mark", #selector(undoLastMark))
+        undoEntry.image = NSImage(systemSymbolName: "arrow.uturn.backward.circle.fill", accessibilityDescription: nil)
+        undoEntry.isEnabled = pending > 0
+        if undoAvailable { shortcut(undoEntry, UInt32(kVK_ANSI_Z)) }
+        menu.addItem(undoEntry)
 
         menu.addItem(.separator())
-        let pending = Inbox.pendingCount()
         menu.addItem(info(pending == 0
             ? "No marks waiting"
             : "\(pending) mark\(pending == 1 ? "" : "s") waiting for your next message"))
@@ -266,25 +262,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         recentItem.submenu = recentMenu
         menu.addItem(recentItem)
-        let undoAction = item("Undo Last Mark", #selector(undoLastMark))
-        undoAction.isEnabled = pending > 0
-        menu.addItem(undoAction)
-        menu.addItem(item("Open Inbox Folder", #selector(openInbox)))
 
         menu.addItem(.separator())
-        menu.addItem(header("Copy to clipboard"))
-        let copyEntry = { (title: String, list: MarkLists.List, action: Selector) in
+        menu.addItem(header(MarkLists.projectName.map { "Copy from \($0)" } ?? "Copy to clipboard"))
+        if MarkLists.projectName == nil {
+            menu.addItem(info("Send a message in Claude Code first"))
+        }
+        let copyEntry = { (title: String, list: MarkLists.List, action: Selector) -> NSMenuItem in
             let n = MarkLists.count(list)
             let entry = self.item(n == 0 ? title : "\(title) (\(n))", action)
             entry.isEnabled = n > 0
             menu.addItem(entry)
+            return entry
         }
-        copyEntry("Copy Priority & Wrong Marks", .steering, #selector(copySteering))
-        copyEntry("Copy Saved Marks", .saved, #selector(copySaved))
-        copyEntry("Copy Roadmap Marks", .roadmap, #selector(copyRoadmap))
-        let clearAction = item("Clear Lists", #selector(clearLists))
-        clearAction.isEnabled = !MarkLists.load().isEmpty
-        menu.addItem(clearAction)
+        let steering = copyEntry("Copy Priority & Wrong Marks", .steering, #selector(copySteering))
+        if copyAvailable { shortcut(steering, UInt32(kVK_ANSI_C)) }
+        _ = copyEntry("Copy Saved Marks", .saved, #selector(copySaved))
+        _ = copyEntry("Copy Roadmap Marks", .roadmap, #selector(copyRoadmap))
+
 
         menu.addItem(.separator())
         menu.addItem(header("Claude Code"))
@@ -312,9 +307,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let login = item("Launch at Login", #selector(toggleLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
+        menu.addItem(item("Show Steerpin Folder", #selector(openInbox)))
         menu.addItem(item("Steerpin on GitHub", #selector(openGitHub)))
         menu.addItem(.separator())
         menu.addItem(item("Quit Steerpin", #selector(quit), key: "q"))
+    }
+
+    /// Shows ⌥⇧<key> at the right edge of a menu item.
+    private func shortcut(_ item: NSMenuItem, _ keyCode: UInt32) {
+        let letters: [UInt32: String] = [UInt32(kVK_ANSI_R): "r", UInt32(kVK_ANSI_W): "w", UInt32(kVK_ANSI_A): "a",
+                                         UInt32(kVK_ANSI_S): "s", UInt32(kVK_ANSI_Z): "z", UInt32(kVK_ANSI_C): "c"]
+        item.keyEquivalent = letters[keyCode] ?? ""
+        item.keyEquivalentModifierMask = [.option, .shift]
+    }
+
+    /// Marking from the menu: the menu doesn't take focus, so the selection is still there once it closes.
+    @objc private func markFromMenu(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let type = MarkType(rawValue: raw) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.capture(type) }
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

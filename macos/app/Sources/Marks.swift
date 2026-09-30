@@ -97,6 +97,18 @@ enum Inbox {
         return (type, text)
     }
 
+    /// Every mark waiting for the next Claude Code message.
+    static func waiting() -> [(type: MarkType, text: String)] {
+        guard let content = try? String(contentsOf: file, encoding: .utf8) else { return [] }
+        return content.split(separator: "\n").compactMap { line in
+            guard let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+                  let type = MarkType(rawValue: json["type"] as? String ?? ""),
+                  let text = json["text"] as? String
+            else { return nil }
+            return (type, text.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
     /// Marks waiting for the next Claude Code message.
     static func pendingCount() -> Int {
         guard let content = try? String(contentsOf: file, encoding: .utf8) else { return 0 }

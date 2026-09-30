@@ -49,7 +49,7 @@ const test = (name, fn) => tests.push([name, fn]);
 
 test('missing inbox and no marks: no output', () => {
   assert.equal(hook(), null);
-  fs.mkdirSync(home);
+  fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(path.join(home, 'inbox.jsonl'), '');
   assert.equal(hook(), null);
 });
@@ -290,6 +290,15 @@ test('a new chat mentions marks carried over; resume and compact stay quiet', ()
   run(['clear']);
   assert.doesNotMatch(start('startup'), /carried over/);
   delete process.env.STEERPIN_APP;
+});
+
+test('each message records the project for the app', () => {
+  hook();
+  const info = JSON.parse(fs.readFileSync(path.join(home, 'last-project.json'), 'utf8'));
+  assert.equal(info.project, project);
+  assert.equal(info.marks, path.join(project, '.claude/steerpin/marks.md'));
+  assert.equal(info.roadmap, path.join(project, '.claude/steerpin/roadmap.md'));
+  assert.equal(info.later, path.join(project, '.claude/steerpin/later.md'));
 });
 
 test('unwritable project fails silently with exit 0', () => {

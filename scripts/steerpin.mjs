@@ -18,6 +18,7 @@ const TYPES = ['priority', 'wrong', 'roadmap', 'later'];
 const ACTIVE_TYPES = ['priority', 'wrong'];
 const HOME = process.env.STEERPIN_HOME || path.join(os.homedir(), '.steerpin');
 const INBOX = path.join(HOME, 'inbox.jsonl');
+const LAST_PROJECT = path.join(HOME, 'last-project.json');
 const CLAIM_PREFIX = 'inbox.jsonl.claim-';
 const STALE_CLAIM_MS = 30_000;
 const MARKS_REL = '.claude/steerpin/marks.md';
@@ -334,6 +335,24 @@ function userMessage(result, truncated) {
   return parts.length ? `steerpin: ${parts.join('; ')}` : '';
 }
 
+// Tells the Steerpin app which project Claude Code worked in last, so its Copy menu reads that project's files.
+function rememberProject(dir, cfg) {
+  const info = {
+    project: dir,
+    marks: marksPath(dir),
+    roadmap: path.resolve(dir, cfg.roadmap),
+    later: path.resolve(dir, cfg.later),
+  };
+  const json = JSON.stringify(info, null, 2) + '\n';
+  try {
+    if (fs.readFileSync(LAST_PROJECT, 'utf8') === json) return;
+  } catch {
+    // not written yet
+  }
+  fs.mkdirSync(HOME, { recursive: true });
+  writeAtomic(LAST_PROJECT, json);
+}
+
 // Marks belong to the project, so a brand-new chat inherits them. Say so, so the user can start fresh.
 // Resumed and compacted chats are continuations and stay quiet.
 function carriedOverNotice(source, marks, result) {
@@ -388,6 +407,7 @@ function runHook(eventName) {
   }
   const dir = projectDir(input);
   const cfg = loadConfig(dir);
+  rememberProject(dir, cfg);
   const result = processInbox(dir, cfg);
   const { marks } = readMarks(dir);
   const { text, truncated } = renderContext(marks, result, cfg);

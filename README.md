@@ -94,19 +94,19 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 
 ### Copying marks
 
-The pin menu's **Copy to clipboard** section turns your marks into ready-to-paste lists:
+The pin menu's **Copy from ‹project›** section copies marks from the project you last used in Claude Code, as ready-to-paste lists:
 
 | Menu item | Copies |
 |---|---|
-| **Copy Priority & Wrong Marks** (also `⌥⇧C`) | Your priority and wrong marks, with a line asking the assistant to keep applying them. Useful for chats outside Claude Code, like Claude.ai. |
-| **Copy Saved Marks** | Everything you saved for later |
-| **Copy Roadmap Marks** | Everything you added to the roadmap |
+| **Copy Priority & Wrong Marks** (also `⌥⇧C`) | Your active priority and wrong marks, with a line asking the assistant to keep applying them. Useful for chats outside Claude Code, like Claude.ai. |
+| **Copy Saved Marks** | Everything in the project's saved-for-later list |
+| **Copy Roadmap Marks** | Everything in the project's roadmap |
 
-These lists are kept by the app, from everything you marked with the hotkeys, across all projects. **Clear Lists** empties them. Your project files stay as they are.
+It reads the same files Claude sees, so it always matches: marks you removed with `/steerpin:unmark` or `/steerpin:clear-marks` aren't copied. Marks you made but haven't sent yet are included.
 
 ### The menu bar app
 
-Click the pin icon to see the shortcuts, how many marks are waiting for your next message, your recent marks, the Claude Code connection, **Launch at Login**, and **Quit**. When the app is newer than your Claude Code plugin, it offers **Update Plugin**. A crossed-out pin means Accessibility access is off.
+Click the pin icon to mark text by clicking instead of using the shortcuts, or to see how many marks are waiting for your next message, your recent marks, the Claude Code connection, **Launch at Login**, and **Quit**. When the app is newer than your Claude Code plugin, it offers **Update Plugin**. A crossed-out pin means Accessibility access is off.
 
 ### Commands
 
