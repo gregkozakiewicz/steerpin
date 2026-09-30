@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.undoLastMark()
         }
         copyAvailable = hotKeys.register(id: 98, keyCode: UInt32(kVK_ANSI_C)) { [weak self] in
-            self?.copyMarks()
+            self?.copySteering()
         }
 
         updateIcon()
@@ -71,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                            title: "Couldn't save the mark", detail: error.localizedDescription)
                 return
             }
-            ChatMarks.add(type, text)
+            MarkLists.add(type, text)
             self.recent.insert(mark, at: 0)
             self.recent = Array(self.recent.prefix(10))
             self.flash(symbol: type.symbol, tint: self.tint(type), title: type.confirmation, detail: text)
@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                   detail: "Already sent to Claude? Run /steerpin:undo in Claude Code")
             return
         }
-        ChatMarks.remove(removed.type, removed.text)
+        MarkLists.remove(removed.type, removed.text)
         if let index = recent.firstIndex(where: { $0.type == removed.type && $0.text == removed.text }) {
             recent.remove(at: index)
         }
@@ -93,23 +93,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               title: "Undid \(removed.type.name.lowercased()) mark", detail: removed.text)
     }
 
-    @objc private func copyMarks() {
-        guard let block = ChatMarks.block() else {
-            flash(symbol: "doc.on.clipboard", tint: .secondaryLabelColor, title: "No marks to copy",
-                  detail: "Mark text with ⌥⇧R or ⌥⇧W first")
+    @objc private func copySteering() { copy(.steering, name: "priority & wrong mark") }
+    @objc private func copySaved() { copy(.saved, name: "saved mark") }
+    @objc private func copyRoadmap() { copy(.roadmap, name: "roadmap mark") }
+
+    private func copy(_ list: MarkLists.List, name: String) {
+        guard let block = MarkLists.block(list) else {
+            flash(symbol: "doc.on.clipboard", tint: .secondaryLabelColor, title: "Nothing to copy",
+                  detail: "No \(name)s yet")
             return
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(block, forType: .string)
-        let n = ChatMarks.load().count
+        let n = MarkLists.count(list)
         flash(symbol: "doc.on.clipboard.fill", tint: .systemBlue,
-              title: "Copied \(n) mark\(n == 1 ? "" : "s")", detail: "Paste into any chat with ⌘V")
+              title: "Copied \(n) \(name)\(n == 1 ? "" : "s")", detail: "Paste anywhere with ⌘V")
     }
 
-    @objc private func clearChatMarks() {
-        ChatMarks.clear()
-        flash(symbol: "trash.circle.fill", tint: .secondaryLabelColor, title: "Chat marks cleared",
-              detail: "Copy Marks starts empty again")
+    @objc private func clearLists() {
+        MarkLists.clear()
+        flash(symbol: "trash.circle.fill", tint: .secondaryLabelColor, title: "Lists cleared",
+              detail: "Copy starts empty again. Your project files are untouched.")
     }
 
     private func tint(_ type: MarkType) -> NSColor {
@@ -238,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let undoItem = info("⌥⇧Z   Undo last mark\(undoAvailable ? "" : " (used by another app)")")
         undoItem.image = NSImage(systemSymbolName: "arrow.uturn.backward.circle.fill", accessibilityDescription: nil)
         menu.addItem(undoItem)
-        let copyItem = info("⌥⇧C   Copy marks for any chat\(copyAvailable ? "" : " (used by another app)")")
+        let copyItem = info("⌥⇧C   Copy priority & wrong marks\(copyAvailable ? "" : " (used by another app)")")
         copyItem.image = NSImage(systemSymbolName: "doc.on.clipboard.fill", accessibilityDescription: nil)
         menu.addItem(copyItem)
 
@@ -268,13 +272,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Open Inbox Folder", #selector(openInbox)))
 
         menu.addItem(.separator())
-        menu.addItem(header("Other chats (ChatGPT, Claude.ai…)"))
-        let chatCount = ChatMarks.load().count
-        let copyAction = item(chatCount == 0 ? "Copy Marks" : "Copy \(chatCount) Mark\(chatCount == 1 ? "" : "s")", #selector(copyMarks))
-        copyAction.isEnabled = chatCount > 0
-        menu.addItem(copyAction)
-        let clearAction = item("Clear Chat Marks", #selector(clearChatMarks))
-        clearAction.isEnabled = chatCount > 0
+        menu.addItem(header("Copy to clipboard"))
+        let copyEntry = { (title: String, list: MarkLists.List, action: Selector) in
+            let n = MarkLists.count(list)
+            let entry = self.item(n == 0 ? title : "\(title) (\(n))", action)
+            entry.isEnabled = n > 0
+            menu.addItem(entry)
+        }
+        copyEntry("Copy Priority & Wrong Marks", .steering, #selector(copySteering))
+        copyEntry("Copy Saved Marks", .saved, #selector(copySaved))
+        copyEntry("Copy Roadmap Marks", .roadmap, #selector(copyRoadmap))
+        let clearAction = item("Clear Lists", #selector(clearLists))
+        clearAction.isEnabled = !MarkLists.load().isEmpty
         menu.addItem(clearAction)
 
         menu.addItem(.separator())

@@ -12,7 +12,7 @@ Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key
 | `⌥⇧A` | **Add to roadmap** | The text is saved to `.claude/steerpin/roadmap.md`, word for word |
 | `⌥⇧S` | **Save for later** | The text is saved to `.claude/steerpin/later.md`, word for word |
 | `⌥⇧Z` | **Undo** | Removes your last mark before it's sent |
-| `⌥⇧C` | **Copy marks** | Copies your priority and wrong marks to paste into ChatGPT, Claude.ai or any chat |
+| `⌥⇧C` | **Copy marks** | Copies your priority and wrong marks as a block you can paste anywhere |
 
 `⌥` is Option and `⇧` is Shift. All the keys sit under your left hand.
 
@@ -92,15 +92,17 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 - **Before you send your next message:** press `⌥⇧Z` (or pin menu › **Undo Last Mark**). The newest waiting mark is removed, and Claude never sees it.
 - **After you sent it:** run `/steerpin:undo` in Claude Code. It removes what that message delivered, and if a mark replaced an older one (priority re-marked as wrong), it brings the old one back.
 
-### Other chats (ChatGPT, Claude.ai, …)
+### Copying marks
 
-Chats outside Claude Code can't receive marks automatically, so the app keeps them for you:
+The pin menu's **Copy to clipboard** section turns your marks into ready-to-paste lists:
 
-1. Mark text with `⌥⇧R` (priority) or `⌥⇧W` (wrong), as usual.
-2. Press `⌥⇧C` (or pin menu › **Copy Marks**).
-3. Paste into your chat with `⌘V`. Claude, ChatGPT or any other assistant gets a short block listing your priorities and what was wrong.
+| Menu item | Copies |
+|---|---|
+| **Copy Priority & Wrong Marks** (also `⌥⇧C`) | Your priority and wrong marks, with a line asking the assistant to keep applying them. Useful for chats outside Claude Code, like Claude.ai. |
+| **Copy Saved Marks** | Everything you saved for later |
+| **Copy Roadmap Marks** | Everything you added to the roadmap |
 
-Paste it again whenever the chat starts drifting, or in a new chat. **Clear Chat Marks** in the pin menu starts over.
+These lists are kept by the app, from everything you marked with the hotkeys, across all projects. **Clear Lists** empties them. Your project files stay as they are.
 
 ### The menu bar app
 
