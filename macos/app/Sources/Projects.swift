@@ -41,10 +41,12 @@ struct Project: Decodable {
 
     var isLatest: Bool { Project.latest?.project == project }
 
+    private static let relative = RelativeDateTimeFormatter()
+
     var lastUsedText: String {
-        guard let date = ISO8601DateFormatter.withFractions.date(from: lastUsed) ?? ISO8601DateFormatter().date(from: lastUsed)
+        guard let date = ISO8601DateFormatter.withFractions.date(from: lastUsed) ?? ISO8601DateFormatter.plain.date(from: lastUsed)
         else { return "" }
-        return "used " + RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+        return "used " + Project.relative.localizedString(for: date, relativeTo: Date())
     }
 
     private func hasAnything(isLatest: Bool) -> Bool {
@@ -212,6 +214,7 @@ struct Project: Decodable {
 }
 
 extension ISO8601DateFormatter {
+    static let plain = ISO8601DateFormatter()
     static let withFractions: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

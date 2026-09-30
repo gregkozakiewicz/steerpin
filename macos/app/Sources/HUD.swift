@@ -9,6 +9,7 @@ final class HUD {
     private let hint = NSTextField(labelWithString: "")
     private let content = NSView()
     private var hideWork: DispatchWorkItem?
+    private var generation = 0
 
     static let glassTint = NSColor.systemPurple.withAlphaComponent(0.35)
     private let height: CGFloat = 40
@@ -101,6 +102,8 @@ final class HUD {
         }
 
         hideWork?.cancel()
+        generation += 1
+        let shown = generation
         let final = NSRect(origin: origin, size: size)
         let wasVisible = panel.isVisible && panel.alphaValue > 0.5
         panel.setFrame(wasVisible ? final : final.offsetBy(dx: 0, dy: 6), display: true)
@@ -113,12 +116,17 @@ final class HUD {
             panel.animator().alphaValue = 1
         }
 
-        let work = DispatchWorkItem { [panel] in
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.generation == shown else { return }
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.3
                 context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-                panel.animator().alphaValue = 0
-            }, completionHandler: { panel.orderOut(nil) })
+                self.panel.animator().alphaValue = 0
+            }, completionHandler: { [weak self] in
+                // A newer popup may have taken over while this one faded; leave it on screen.
+                guard let self, self.generation == shown else { return }
+                self.panel.orderOut(nil)
+            })
         }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + (hint == nil ? 1.4 : 3.0), execute: work)

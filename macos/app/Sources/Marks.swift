@@ -60,10 +60,9 @@ struct Mark {
 enum Inbox {
     static let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".steerpin")
     static let file = folder.appendingPathComponent("inbox.jsonl")
+    private static let iso = ISO8601DateFormatter()
 
     static func append(_ mark: Mark, sourceApp: String) throws {
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let iso = ISO8601DateFormatter()
         let entry: [String: String] = [
             "type": mark.type.rawValue,
             "text": mark.text,
@@ -72,13 +71,31 @@ enum Inbox {
         ]
         var line = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys, .withoutEscapingSlashes])
         line.append(0x0A)
-        if !FileManager.default.fileExists(atPath: file.path) {
-            FileManager.default.createFile(atPath: file.path, contents: nil)
-        }
-        let handle = try FileHandle(forWritingTo: file)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: line)
+        try appendData(line)
+    }
+
+    /// Appends already-encoded inbox lines, e.g. when undoing a clear.
+    static func appendRaw(_ lines: String) {
+        try? appendData(Data(lines.utf8))
+    }
+
+    /// O_APPEND, so a line the plugin's `capture` command writes at the same moment is never overwritten.
+    /// Folder and file are owner-only: marked text can hold anything the user selected, secrets included.
+    private static func appendData(_ data: Data) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
+        chmod(folder.path, 0o700)
+        let fd = open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+        guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        try handle.write(contentsOf: data)
+    }
+
+    /// Replaces the inbox with these lines, keeping it owner-only.
+    private static func rewrite(_ lines: [String]) {
+        let rest = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
+        try? rest.write(to: file, atomically: true, encoding: .utf8)
+        chmod(file.path, 0o600)
     }
 
     /// Removes the newest waiting mark. Returns nil when the inbox is empty,
@@ -87,8 +104,7 @@ enum Inbox {
         guard let content = try? String(contentsOf: file, encoding: .utf8) else { return nil }
         var lines = content.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
         guard let last = lines.popLast() else { return nil }
-        let rest = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
-        try? rest.write(to: file, atomically: true, encoding: .utf8)
+        rewrite(lines)
         guard let data = last.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = MarkType(rawValue: json["type"] as? String ?? ""),
@@ -110,21 +126,8 @@ enum Inbox {
                 kept.append(line)
             }
         }
-        let rest = kept.isEmpty ? "" : kept.joined(separator: "\n") + "\n"
-        try? rest.write(to: file, atomically: true, encoding: .utf8)
+        rewrite(kept.map(String.init))
         return removed
-    }
-
-    /// Appends already-encoded inbox lines, e.g. when undoing a clear.
-    static func appendRaw(_ lines: String) {
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: file.path) {
-            FileManager.default.createFile(atPath: file.path, contents: nil)
-        }
-        guard let handle = try? FileHandle(forWritingTo: file) else { return }
-        defer { try? handle.close() }
-        _ = try? handle.seekToEnd()
-        try? handle.write(contentsOf: Data(lines.utf8))
     }
 
     /// Every mark waiting for the next Claude Code message.

@@ -207,7 +207,7 @@ Optional, per project, in `.claude/steerpin/config.json`. Anything you leave out
 }
 ```
 
-- `roadmap`, `later`: where saved items go, relative to the project root. Missing files and folders are created. To share your roadmap with the team, point it somewhere git tracks, such as `"docs/roadmap.md"`.
+- `roadmap`, `later`: where saved items go, relative to the project root. Missing files and folders are created. To share your roadmap with the team, point it somewhere git tracks, such as `"docs/roadmap.md"`. Paths outside the project, and symlinks, are refused: a cloned repo can't make Steerpin write to your dotfiles.
 - `maxActiveMarks`: at most this many marks (the newest) are sent to Claude.
 - `maxMarkLength`: longer marks are shortened in what Claude sees. The full text stays in `marks.md`.
 
@@ -231,7 +231,9 @@ In your home folder, in `~/.steerpin/`:
 | `inbox.jsonl` | Marks waiting for your next message. Emptied when you send it |
 | `projects.json` | Your recent Claude Code projects, for the pin menu |
 
-All of these are plain Markdown or JSON, so you can open and edit them by hand. (`/steerpin:clear-marks` in Claude Code does the same as the menu's Clear, without the undo.)
+All of these are plain Markdown or JSON, so you can open and edit them by hand. (`/steerpin:clear-marks` in Claude Code does the same as the menu's Clear, without the undo.) `~/.steerpin` and the marks files are readable by your user only, since marked text can hold anything you selected.
+
+If a setting in `config.json` is invalid, Steerpin uses the default for it and tells you which one with your next message.
 
 The first time Steerpin saves something in a git repository, it adds `.claude/steerpin/` to the project's `.gitignore` and tells you once. Your marks, roadmap and later items are never committed unless you change that.
 

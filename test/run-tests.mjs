@@ -288,6 +288,89 @@ test('unwritable project fails silently with exit 0', () => {
   assert.doesNotThrow(() => run(['hook'], '{}'));
 });
 
+test('config paths outside the project and bad limits are ignored and reported', () => {
+  const victim = path.join(path.dirname(project), 'victim.md');
+  fs.writeFileSync(victim, '# untouched\n');
+  fs.mkdirSync(path.join(project, '.claude/steerpin'), { recursive: true });
+  fs.writeFileSync(path.join(project, '.claude/steerpin/config.json'), JSON.stringify({
+    roadmap: '../victim.md', later: victim, maxActiveMarks: 'lots', maxMarkLength: -1,
+  }));
+  inbox({ type: 'roadmap', text: 'r' }, { type: 'later', text: 'l' }, { type: 'priority', text: 'p' });
+  const out = hook();
+  assert.equal(fs.readFileSync(victim, 'utf8'), '# untouched\n');
+  assert.match(read('.claude/steerpin/roadmap.md'), /- r/);
+  assert.match(read('.claude/steerpin/later.md'), /- l/);
+  assert.match(context(out), /\[1\] p/);
+  assert.match(out.systemMessage, /config\.json: ignoring roadmap \(must be a path inside the project\), later \(.*\), maxActiveMarks \(must be a positive whole number\), maxMarkLength/);
+  const projects = JSON.parse(fs.readFileSync(path.join(home, 'projects.json'), 'utf8'));
+  assert.equal(projects[0].later, path.join(project, '.claude/steerpin/later.md'));
+});
+
+test('a config file that is not JSON is reported, marks still arrive', () => {
+  fs.mkdirSync(path.join(project, '.claude/steerpin'), { recursive: true });
+  fs.writeFileSync(path.join(project, '.claude/steerpin/config.json'), '{oops');
+  inbox({ type: 'priority', text: 'p' });
+  const out = hook();
+  assert.match(context(out), /\[1\] p/);
+  assert.match(out.systemMessage, /config\.json: ignoring the whole file, it is not valid JSON/);
+});
+
+test('a list file that is a symlink is refused; other marks still arrive', () => {
+  const victim = path.join(path.dirname(project), 'profile');
+  fs.writeFileSync(victim, '# dotfile\n');
+  fs.mkdirSync(path.join(project, '.claude/steerpin'), { recursive: true });
+  fs.symlinkSync(victim, path.join(project, '.claude/steerpin/later.md'));
+  inbox({ type: 'later', text: 'via symlink' }, { type: 'priority', text: 'still delivered' });
+  const out = hook();
+  assert.equal(fs.readFileSync(victim, 'utf8'), '# dotfile\n');
+  assert.match(out.systemMessage, /not saved: \.claude\/steerpin\/later\.md is a symlink/);
+  assert.match(context(out), /\[1\] still delivered/);
+  assert.equal(fs.existsSync(path.join(home, 'inbox.jsonl')), false); // dropped, not retried forever
+  assert.match(run(['add', 'later', 'x']), /Not saved: .*later\.md is a symlink/);
+});
+
+test('a steerpin folder linked outside the project blocks delivery and keeps the marks', () => {
+  const outside = path.join(path.dirname(project), 'elsewhere');
+  fs.mkdirSync(outside);
+  fs.mkdirSync(path.join(project, '.claude'));
+  fs.symlinkSync(outside, path.join(project, '.claude/steerpin'));
+  inbox({ type: 'priority', text: 'p' });
+  const out = hook();
+  assert.match(out.systemMessage, /not saved: \.claude\/steerpin\/marks\.md points outside the project, new marks are waiting/);
+  assert.equal(fs.readdirSync(outside).length, 0);
+  assert.ok(fs.readdirSync(home).some((n) => n.startsWith('inbox.jsonl.claim-'))); // retried once stale
+});
+
+test('undo only touches files inside the project', () => {
+  const victim = path.join(path.dirname(project), 'victim.md');
+  const before = 'a\n\n- x\n  _m_\nb\n';
+  fs.writeFileSync(victim, before);
+  fs.mkdirSync(path.join(project, '.claude/steerpin'), { recursive: true });
+  fs.writeFileSync(path.join(project, '.claude/steerpin/last-delivery.json'),
+    JSON.stringify([{ kind: 'list', type: 'roadmap', file: '../victim.md', entry: '- x\n  _m_' }]));
+  assert.match(run(['undo']), /Nothing to undo: those marks were already removed/);
+  assert.equal(fs.readFileSync(victim, 'utf8'), before);
+});
+
+test('appending never truncates, and home files are owner-only', () => {
+  fs.mkdirSync(path.join(project, '.git'));
+  fs.writeFileSync(path.join(project, '.gitignore'), 'dist/\n');
+  fs.mkdirSync(path.join(project, '.claude/steerpin'), { recursive: true });
+  fs.writeFileSync(path.join(project, '.claude/steerpin/roadmap.md'), '# Mine\n\n- kept');
+  inbox({ type: 'roadmap', text: 'new' }, { type: 'priority', text: 'p' });
+  hook();
+  run(['capture', 'later', 'x']);
+  assert.equal(read('.gitignore'), 'dist/\n.claude/steerpin/\n');
+  assert.match(read('.claude/steerpin/roadmap.md'), /^# Mine\n\n- kept\n\n- new\n/);
+  if (process.platform === 'win32') return;
+  const mode = (p) => fs.statSync(p).mode & 0o777;
+  assert.equal(mode(home), 0o700);
+  assert.equal(mode(path.join(home, 'projects.json')), 0o600);
+  assert.equal(mode(path.join(home, 'inbox.jsonl')), 0o600);
+  assert.equal(mode(path.join(project, '.claude/steerpin/marks.md')), 0o600);
+  assert.equal(mode(path.join(project, '.claude/steerpin/last-delivery.json')), 0o600);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   reset();

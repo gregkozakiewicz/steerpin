@@ -489,7 +489,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openInbox() {
-        try? FileManager.default.createDirectory(at: Inbox.folder, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: Inbox.folder, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
         NSWorkspace.shared.open(Inbox.folder)
     }
 

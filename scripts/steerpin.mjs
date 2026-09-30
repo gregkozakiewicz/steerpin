@@ -41,14 +41,48 @@ function projectDir(input) {
   return process.env.CLAUDE_PROJECT_DIR || input?.cwd || process.cwd();
 }
 
+// Reads .claude/steerpin/config.json. Bad settings fall back to the defaults and are named in
+// `problems`, so the user hears about them instead of the hook failing quietly. List paths must
+// stay inside the project: a cloned repo could otherwise point them at a dotfile.
 function loadConfig(dir) {
+  const cfg = { ...DEFAULTS };
+  const problems = [];
+  let raw;
   try {
-    const user = JSON.parse(fs.readFileSync(path.join(dir, CONFIG_REL), 'utf8'));
-    return { ...DEFAULTS, ...user };
+    raw = fs.readFileSync(path.join(dir, CONFIG_REL), 'utf8');
   } catch {
-    return { ...DEFAULTS };
+    return { cfg, problems };
   }
+  let user;
+  try {
+    user = JSON.parse(raw);
+  } catch {
+    return { cfg, problems: ['the whole file, it is not valid JSON'] };
+  }
+  if (!user || typeof user !== 'object' || Array.isArray(user)) {
+    return { cfg, problems: ['the whole file, it is not a JSON object'] };
+  }
+  for (const key of ['roadmap', 'later']) {
+    if (!(key in user)) continue;
+    if (typeof user[key] === 'string' && insideProject(dir, user[key])) cfg[key] = user[key];
+    else problems.push(`${key} (must be a path inside the project)`);
+  }
+  for (const key of ['maxActiveMarks', 'maxMarkLength']) {
+    if (!(key in user)) continue;
+    if (Number.isInteger(user[key]) && user[key] > 0) cfg[key] = user[key];
+    else problems.push(`${key} (must be a positive whole number)`);
+  }
+  return { cfg, problems };
 }
+
+// True when `rel` names a file below `dir`. Lexical only; symlinks are checked at write time.
+function insideProject(dir, rel) {
+  const relative = path.relative(dir, path.resolve(dir, rel));
+  return relative !== '' && !isOutside(relative);
+}
+
+const isOutside = (relative) =>
+  relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
 
 // ---------- inbox ----------
 
@@ -165,13 +199,52 @@ function writeMarks(dir, state) {
     if (m.meta) parts.push(`_${m.meta}_`);
     parts.push('', m.text.replace(/^## \[/gm, '\\## ['));
   }
-  writeAtomic(file, parts.join('\n') + '\n');
+  writeAtomic(safeTarget(dir, file), parts.join('\n') + '\n', PRIVATE);
 }
 
-function writeAtomic(file, content) {
+// ---------- writing files ----------
+
+const PRIVATE = 0o600;
+const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+
+class UnsafePathError extends Error {}
+
+// The real path to write to, once `file` is known to sit inside `root` with no symlink in the way.
+// A repo can commit `.claude/steerpin/later.md` as a symlink to a dotfile, so writes never follow one.
+function safeTarget(root, file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const parent = fs.realpathSync(path.dirname(file));
+  const shown = path.relative(root, file);
+  if (isOutside(path.relative(fs.realpathSync(root), parent))) {
+    throw new UnsafePathError(`${shown} points outside the project`);
+  }
+  let stat;
+  try {
+    stat = fs.lstatSync(file);
+  } catch {
+    // new file
+  }
+  if (stat?.isSymbolicLink()) throw new UnsafePathError(`${shown} is a symlink`);
+  return path.join(parent, path.basename(file));
+}
+
+// Appends without ever truncating, so a crash mid-write cannot empty the user's file.
+function appendFile(file, text, mode) {
+  const flags = fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | O_NOFOLLOW;
+  const fd = fs.openSync(file, flags, mode);
+  try {
+    const buf = Buffer.from(text);
+    let done = 0;
+    while (done < buf.length) done += fs.writeSync(fd, buf, done, buf.length - done);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function writeAtomic(file, content, mode) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, content);
+  fs.writeFileSync(tmp, content, { mode });
   fs.renameSync(tmp, file);
 }
 
@@ -187,9 +260,11 @@ function metaLine(item) {
 
 // ---------- processing ----------
 
+const emptyResult = () => ({ newIds: [], saved: {}, skipped: 0, refused: [] });
+
 // Applies inbox items to the project. Returns what changed, for the context block and user message.
 function applyItems(dir, cfg, items) {
-  const result = { newIds: [], saved: {}, skipped: 0 };
+  const result = emptyResult();
   if (!items.length) return result;
 
   const state = readMarks(dir);
@@ -211,7 +286,14 @@ function applyItems(dir, cfg, items) {
       marksChanged = true;
     } else {
       const rel = cfg[item.type];
-      const entry = appendToList(dir, rel, item);
+      let entry;
+      try {
+        entry = appendToList(dir, rel, item);
+      } catch (err) {
+        if (!(err instanceof UnsafePathError)) throw err;
+        result.refused.push(err.message); // the item is dropped, and the user is told why
+        continue;
+      }
       if (entry) {
         result.saved[rel] = (result.saved[rel] || 0) + 1;
         undo.push({ kind: 'list', type: item.type, file: rel, entry });
@@ -222,7 +304,9 @@ function applyItems(dir, cfg, items) {
   }
 
   if (marksChanged) writeMarks(dir, state);
-  if (undo.length) writeAtomic(path.join(dir, UNDO_REL), JSON.stringify(undo, null, 2) + '\n');
+  if (undo.length) {
+    writeAtomic(safeTarget(dir, path.join(dir, UNDO_REL)), JSON.stringify(undo, null, 2) + '\n', PRIVATE);
+  }
   if (marksChanged || Object.keys(result.saved).length) result.gitignored = ensureGitignore(dir);
   return result;
 }
@@ -242,26 +326,33 @@ function ensureGitignore(dir) {
     .map((l) => l.trim().replace(/^\//, '').replace(/\/?\*{0,2}$/, ''))
     .some((l) => l === '.claude' || l === '.claude/steerpin');
   if (covered) return false;
+  let target;
+  try {
+    target = safeTarget(dir, file);
+  } catch (err) {
+    if (err instanceof UnsafePathError) return false;
+    throw err;
+  }
   const sep = content && !content.endsWith('\n') ? '\n' : '';
-  fs.writeFileSync(file, `${content}${sep}${IGNORE_LINE}\n`);
+  appendFile(target, `${sep}${IGNORE_LINE}\n`);
   return true;
 }
 
 function appendToList(dir, relPath, item) {
-  const file = path.resolve(dir, relPath);
+  const file = safeTarget(dir, path.resolve(dir, relPath));
   let content = '';
   try {
     content = fs.readFileSync(file, 'utf8');
   } catch {
-    content = `${FILE_HEADINGS[item.type]}\n\nItems saved with steerpin.\n`;
+    // new file
   }
   const [first, ...rest] = item.text.split('\n');
   const entry = [`- ${first}`, ...rest.map((l) => (l ? `  ${l}` : '')), `  _${metaLine(item)}_`].join('\n');
   const body = entry.slice(0, entry.lastIndexOf('\n  _'));
   if (content.includes(body)) return null;
-  if (!content.endsWith('\n')) content += '\n';
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${content}\n${entry}\n`);
+  let head = `${FILE_HEADINGS[item.type]}\n\nItems saved with steerpin.\n`;
+  if (content) head = content.endsWith('\n') ? '' : '\n';
+  appendFile(file, `${head}\n${entry}\n`);
   return entry;
 }
 
@@ -326,13 +417,15 @@ function renderContext(marks, result, cfg) {
   return { text: out.join('\n'), truncated };
 }
 
-function userMessage(result, truncated) {
+function userMessage(result, truncated, configProblems = []) {
   const parts = [];
   if (result.newIds.length) parts.push(`new mark${result.newIds.length === 1 ? '' : 's'} ${result.newIds.map((id) => `[${id}]`).join(' ')}`);
   for (const [rel, n] of Object.entries(result.saved)) parts.push(`${n} saved to ${rel}`);
+  for (const why of result.refused) parts.push(`not saved: ${why}`);
   const newTruncated = truncated.filter((id) => result.newIds.includes(id));
   if (newTruncated.length) parts.push(`${newTruncated.map((id) => `[${id}]`).join(' ')} truncated in context (long selection)`);
   if (result.gitignored) parts.push(`added ${IGNORE_LINE} to .gitignore`);
+  if (configProblems.length) parts.push(`${CONFIG_REL}: ignoring ${configProblems.join(', ')}`);
   return parts.length ? `steerpin: ${parts.join('; ')}` : '';
 }
 
@@ -352,9 +445,19 @@ function rememberProject(dir, cfg) {
     lastUsed: new Date().toISOString(),
   };
   projects = [entry, ...projects.filter((p) => p.project !== dir)].slice(0, MAX_PROJECTS);
-  fs.mkdirSync(HOME, { recursive: true });
-  writeAtomic(PROJECTS, JSON.stringify(projects, null, 2) + '\n');
+  privateHome();
+  writeAtomic(PROJECTS, JSON.stringify(projects, null, 2) + '\n', PRIVATE);
   fs.rmSync(path.join(HOME, 'last-project.json'), { force: true }); // replaced by projects.json
+}
+
+// Marked text can hold anything the user selected, secrets included, so ~/.steerpin is owner-only.
+function privateHome() {
+  fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
+  try {
+    fs.chmodSync(HOME, 0o700);
+  } catch {
+    // not ours to change (or Windows)
+  }
 }
 
 // Marks belong to the project, so a brand-new chat inherits them. Say so, so the user can start fresh.
@@ -389,13 +492,21 @@ function runHook(eventName) {
     // no usable input; fall back to cwd
   }
   const dir = projectDir(input);
-  const cfg = loadConfig(dir);
+  const { cfg, problems } = loadConfig(dir);
   rememberProject(dir, cfg);
-  const result = processInbox(dir, cfg);
+  let result;
+  try {
+    result = processInbox(dir, cfg);
+  } catch (err) {
+    if (!(err instanceof UnsafePathError)) throw err;
+    // marks.md itself is unsafe to write. The claimed inbox stays and is retried once stale.
+    result = emptyResult();
+    result.refused.push(`${err.message}, new marks are waiting`);
+  }
   const { marks } = readMarks(dir);
   const { text, truncated } = renderContext(marks, result, cfg);
   const carried = eventName === 'SessionStart' ? carriedOverNotice(input.source, marks, result) : '';
-  const message = [userMessage(result, truncated), carried]
+  const message = [userMessage(result, truncated, problems), carried]
     .filter(Boolean)
     .join('\n');
   if (!text && !message) return;
@@ -407,10 +518,10 @@ function runHook(eventName) {
 
 function list() {
   const dir = projectDir();
-  const cfg = loadConfig(dir);
+  const { cfg, problems } = loadConfig(dir);
   const result = processInbox(dir, cfg);
   const { marks } = readMarks(dir);
-  const message = userMessage(result, []);
+  const message = userMessage(result, [], problems);
   if (message) console.log(`${message}\n`);
   if (!marks.length) {
     console.log('No active marks.');
@@ -478,16 +589,17 @@ function undo() {
       done.push(`Removed [${mark.id}] ${mark.type}: ${mark.text.split('\n')[0]}`);
       if (step.replaced) done.push(`Restored [${step.replaced.id}] ${step.replaced.type}`);
     } else {
-      const listFile = path.resolve(dir, step.file);
-      let content;
+      if (typeof step.file !== 'string' || typeof step.entry !== 'string' || !insideProject(dir, step.file)) continue;
+      let listFile, content;
       try {
+        listFile = safeTarget(dir, path.resolve(dir, step.file));
         content = fs.readFileSync(listFile, 'utf8');
       } catch {
         continue;
       }
       const at = content.lastIndexOf(`\n${step.entry}\n`);
       if (at === -1) continue;
-      fs.writeFileSync(listFile, content.slice(0, at) + content.slice(at + step.entry.length + 1));
+      writeAtomic(listFile, content.slice(0, at) + content.slice(at + step.entry.length + 1));
       done.push(`Removed from ${step.file}: ${step.entry.slice(2).split('\n')[0]}`);
     }
   }
@@ -517,21 +629,23 @@ function add(args) {
   const parsed = parseTypedText(args, 'Usage: /steerpin:mark <priority|wrong|roadmap|later> <text>');
   if (!parsed) return;
   const dir = projectDir();
-  const cfg = loadConfig(dir);
+  const { cfg, problems } = loadConfig(dir);
+  if (problems.length) console.log(`${CONFIG_REL}: ignoring ${problems.join(', ')}.`);
   const item = { ...parsed, timestamp: new Date().toISOString(), source: '/steerpin:mark' };
   const result = applyItems(dir, cfg, [item]);
   if (result.gitignored) console.log(`Added ${IGNORE_LINE} to .gitignore.`);
   if (result.newIds.length) console.log(`Added [${result.newIds[0]}] ${item.type}. It will be sent with every message until removed.`);
   else if (Object.keys(result.saved).length) console.log(`Saved to ${cfg[item.type]}.`);
+  else if (result.refused.length) console.log(`Not saved: ${result.refused.join('; ')}.`);
   else console.log('Already marked, nothing changed.');
 }
 
 function capture(args) {
   const parsed = parseTypedText(args, 'Usage: steerpin.mjs capture <priority|wrong|roadmap|later> <text>');
   if (!parsed) return;
-  fs.mkdirSync(HOME, { recursive: true });
+  privateHome();
   const line = { ...parsed, timestamp: new Date().toISOString(), source_app: process.env.STEERPIN_SOURCE || 'cli' };
-  fs.appendFileSync(INBOX, JSON.stringify(line) + '\n');
+  fs.appendFileSync(INBOX, JSON.stringify(line) + '\n', { mode: PRIVATE });
   console.log(`Marked as ${parsed.type}.`);
 }
 
