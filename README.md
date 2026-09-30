@@ -1,6 +1,8 @@
-<img src="macos/app/icon/AppIcon-preview.png" width="96" alt="">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/steerpin-logo-dark.png">
+  <img src="assets/steerpin-logo.png" width="180" alt="Steerpin">
+</picture>
 
-# Steerpin
 
 Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key, and Claude keeps that mark in mind on every message until you remove it.
 
