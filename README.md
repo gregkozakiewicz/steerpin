@@ -70,9 +70,7 @@ In Claude Code, run:
 
 If you forget, Steerpin reminds you: when a session starts and Hammerspoon is installed but the hotkeys aren't, you'll see `steerpin: Hammerspoon found. Run /steerpin:setup-hotkeys to turn on the hotkeys.` The same reminder appears when a plugin update brings new hotkeys.
 
-This copies the hotkey script into `~/.hammerspoon/` and loads it from your `~/.hammerspoon/init.lua`. Any Hammerspoon config you already have stays as it is.
-
-Then click the hammer icon in the menu bar › **Reload Config**. When macOS asks whether Hammerspoon can send notifications, click **Allow**.
+This copies the hotkey script into `~/.hammerspoon/`, loads it from your `~/.hammerspoon/init.lua` and restarts Hammerspoon. Any Hammerspoon config you already have stays as it is.
 
 ### Step 4: test it
 
@@ -152,7 +150,7 @@ require("steerpin").setup({
 })
 ```
 
-Keys you don't list keep their defaults. Reload Config afterwards. Running `/steerpin:setup-hotkeys` again won't undo your changes.
+Keys you don't list keep their defaults. Click the hammer icon › **Reload Config** afterwards. Running `/steerpin:setup-hotkeys` again won't undo your changes.
 
 ## Without hotkeys
 

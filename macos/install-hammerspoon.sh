@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copies steerpin.lua into ~/.hammerspoon and loads it from init.lua. Run again after updating.
+# Copies steerpin.lua into ~/.hammerspoon, loads it from init.lua and restarts Hammerspoon. Run again after updating.
 set -e
 if [ ! -d /Applications/Hammerspoon.app ] && [ ! -d "$HOME/Applications/Hammerspoon.app" ]; then
   echo "Hammerspoon is not installed. Install it first: brew install --cask hammerspoon"
@@ -13,4 +13,10 @@ touch "$dir/init.lua"
 if ! grep -q 'require("steerpin")' "$dir/init.lua"; then
   printf '\nrequire("steerpin")\n' >> "$dir/init.lua"
 fi
-echo "Installed $dir/steerpin.lua. Reload Hammerspoon (menu bar icon > Reload Config)."
+# Restart Hammerspoon so it loads the new config.
+if pgrep -xq Hammerspoon; then
+  pkill -x Hammerspoon
+  while pgrep -xq Hammerspoon; do sleep 0.1; done
+fi
+open -g -a Hammerspoon
+echo "Hotkeys are on: ⌥⇧R priority, ⌥⇧W wrong, ⌥⇧A roadmap, ⌥⇧S later."
