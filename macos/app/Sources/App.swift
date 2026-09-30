@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var unavailable: Set<MarkType> = []
     private var recent: [Mark] = []
     private var accessTimer: Timer?
+    private var pluginState: ClaudeCode.PluginState?
+    private var connecting = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu()
@@ -23,10 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         updateIcon()
-        if !Selection.hasAccess {
+        if Selection.hasAccess {
+            offerToConnect()
+        } else {
             Selection.requestAccess()
             watchForAccess()
         }
+        refreshPluginState()
     }
 
     // MARK: Marking
@@ -86,7 +91,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.updateIcon()
             self?.flash(symbol: "checkmark.circle.fill", tint: .systemGreen, title: "Steerpin is ready",
                         detail: "Select text and press ⌥⇧R, ⌥⇧W, ⌥⇧A or ⌥⇧S")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self?.offerToConnect() }
         }
+    }
+
+    // MARK: Claude Code
+
+    /// Checking runs a shell once to find `claude`, so it happens off the main thread.
+    private func refreshPluginState(then next: ((ClaudeCode.PluginState) -> Void)? = nil) {
+        DispatchQueue.global(qos: .utility).async {
+            let state = ClaudeCode.state()
+            DispatchQueue.main.async {
+                self.pluginState = state
+                next?(state)
+            }
+        }
+    }
+
+    /// Asks once per app version whether to install or update the Claude Code plugin.
+    private func offerToConnect() {
+        refreshPluginState { [weak self] state in
+            guard let self else { return }
+            let key = "offeredConnect-\(ClaudeCode.appVersion)"
+            guard !UserDefaults.standard.bool(forKey: key) else { return }
+            let alert = NSAlert()
+            switch state {
+            case .notInstalled:
+                alert.messageText = "Connect Steerpin to Claude Code?"
+                alert.informativeText = "This installs the Steerpin plugin, which gives your marks to Claude with every message."
+                alert.addButton(withTitle: "Connect")
+            case .outdated(let installed):
+                alert.messageText = "Update the Claude Code plugin?"
+                alert.informativeText = "Your Steerpin plugin is version \(installed). This app works best with \(ClaudeCode.appVersion)."
+                alert.addButton(withTitle: "Update")
+            default:
+                return
+            }
+            alert.addButton(withTitle: "Not Now")
+            UserDefaults.standard.set(true, forKey: key)
+            NSApp.activate(ignoringOtherApps: true)
+            if alert.runModal() == .alertFirstButtonReturn { self.connectClaudeCode() }
+        }
+    }
+
+    @objc private func connectClaudeCode() {
+        guard !connecting else { return }
+        connecting = true
+        flash(symbol: "arrow.triangle.2.circlepath", tint: .systemBlue,
+              title: "Connecting to Claude Code…", detail: "Installing the Steerpin plugin")
+        ClaudeCode.connect { [weak self] ok, message in
+            guard let self else { return }
+            self.connecting = false
+            self.refreshPluginState()
+            if ok {
+                self.flash(symbol: "checkmark.circle.fill", tint: .systemGreen,
+                           title: "Connected to Claude Code", detail: message)
+            } else {
+                self.flash(symbol: "xmark.octagon.fill", tint: .systemRed,
+                           title: "Couldn't connect to Claude Code", detail: message)
+            }
+        }
+    }
+
+    @objc private func getClaudeCode() {
+        NSWorkspace.shared.open(URL(string: "https://code.claude.com")!)
     }
 
     private func updateIcon() {
@@ -100,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         updateIcon()
+        if !connecting, pluginState != nil { pluginState = ClaudeCode.state() }
         menu.removeAllItems()
 
         if !Selection.hasAccess {
@@ -137,6 +206,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recentItem.submenu = recentMenu
         menu.addItem(recentItem)
         menu.addItem(item("Open Inbox Folder", #selector(openInbox)))
+
+        menu.addItem(.separator())
+        menu.addItem(header("Claude Code"))
+        switch pluginState {
+        case _ where connecting:
+            menu.addItem(info("Connecting…"))
+        case .connected:
+            let entry = info("Connected")
+            entry.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+            menu.addItem(entry)
+        case .notInstalled:
+            menu.addItem(item("Connect to Claude Code", #selector(connectClaudeCode)))
+        case .outdated(let installed):
+            menu.addItem(item("Update Plugin (\(installed) → \(ClaudeCode.appVersion))", #selector(connectClaudeCode)))
+        case .noCLI:
+            menu.addItem(info("Claude Code not found"))
+            menu.addItem(item("Get Claude Code…", #selector(getClaudeCode)))
+        case nil:
+            menu.addItem(info("Checking…"))
+        }
 
         menu.addItem(.separator())
         let login = item("Launch at Login", #selector(toggleLogin))
