@@ -8,6 +8,7 @@ final class HUD {
     private let title = NSTextField(labelWithString: "")
     private let hint = NSTextField(labelWithString: "")
     private let content = NSView()
+    private let gloss = GlossView()
     private var hideWork: DispatchWorkItem?
 
     private let height: CGFloat = 40
@@ -38,8 +39,14 @@ final class HUD {
         row.spacing = 8
         row.alignment = .centerY
         row.translatesAutoresizingMaskIntoConstraints = false
+        gloss.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(gloss)
         content.addSubview(row)
         NSLayoutConstraint.activate([
+            gloss.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            gloss.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            gloss.topAnchor.constraint(equalTo: content.topAnchor),
+            gloss.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             row.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 14),
             row.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             row.centerYAnchor.constraint(equalTo: content.centerYAnchor),
@@ -80,11 +87,12 @@ final class HUD {
         content.layoutSubtreeIfNeeded()
         let textWidth = max(self.title.intrinsicContentSize.width, hint == nil ? 0 : self.hint.intrinsicContentSize.width)
         let size = NSSize(width: min(max(14 + 15 + 8 + textWidth + 16, 160), 360), height: hint == nil ? height : hintHeight)
-        let radius = size.height / 2
+        let radius = hint == nil ? size.height / 2 : 18
+        gloss.cornerRadius = radius
         if #available(macOS 26.0, *), let glass = panel.contentView as? NSGlassEffectView {
-            glass.cornerRadius = hint == nil ? radius : 18
+            glass.cornerRadius = radius
         } else if let frosted = panel.contentView {
-            frosted.layer?.cornerRadius = hint == nil ? radius : 18
+            frosted.layer?.cornerRadius = radius
             frosted.layer?.masksToBounds = true
         }
 
@@ -117,5 +125,73 @@ final class HUD {
         }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + (hint == nil ? 1.4 : 3.0), execute: work)
+    }
+}
+
+/// The glossy finish drawn over the glass: a bright top edge, a sheen across the top half,
+/// a light rim fading downwards and a slightly darker bottom. Visible on any background.
+private final class GlossView: NSView {
+    var cornerRadius: CGFloat = 20 { didSet { needsLayout = true } }
+
+    private let base = CAGradientLayer()
+    private let sheen = CAGradientLayer()
+    private let rim = CAGradientLayer()
+    private let rimShape = CAShapeLayer()
+    private let clip = CAShapeLayer()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.addSublayer(base)
+        layer?.addSublayer(sheen)
+        rim.mask = rimShape
+        layer?.addSublayer(rim)
+        rimShape.fillColor = nil
+        rimShape.strokeColor = NSColor.black.cgColor
+        rimShape.lineWidth = 1.2
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let bounds = self.bounds
+        let path = CGPath(roundedRect: bounds, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
+        clip.path = path
+        layer?.mask = clip
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let white = { (a: CGFloat) in NSColor.white.withAlphaComponent(a).cgColor }
+        let black = { (a: CGFloat) in NSColor.black.withAlphaComponent(a).cgColor }
+
+        // Layers are not flipped: y = 1 is the top.
+        base.frame = bounds
+        base.startPoint = CGPoint(x: 0.5, y: 1)
+        base.endPoint = CGPoint(x: 0.5, y: 0)
+        base.colors = dark ? [white(0.14), white(0.03), black(0.18)] : [white(0.35), black(0.03), black(0.13)]
+        base.locations = [0, 0.55, 1]
+
+        sheen.frame = CGRect(x: 1.5, y: bounds.height * 0.48, width: bounds.width - 3, height: bounds.height * 0.52 - 1.5)
+        sheen.cornerRadius = min(cornerRadius, sheen.frame.height / 2)
+        sheen.startPoint = CGPoint(x: 0.5, y: 1)
+        sheen.endPoint = CGPoint(x: 0.5, y: 0)
+        sheen.colors = dark ? [white(0.28), white(0.0)] : [white(1.0), white(0.55)]
+
+        rim.frame = bounds
+        rim.startPoint = CGPoint(x: 0.5, y: 1)
+        rim.endPoint = CGPoint(x: 0.5, y: 0)
+        rim.colors = dark ? [white(0.55), white(0.08), white(0.18)] : [white(1.0), black(0.06), black(0.22)]
+        rim.locations = [0, 0.6, 1]
+        rimShape.frame = bounds
+        rimShape.path = CGPath(roundedRect: bounds.insetBy(dx: 0.6, dy: 0.6),
+                               cornerWidth: cornerRadius - 0.6, cornerHeight: cornerRadius - 0.6, transform: nil)
+        CATransaction.commit()
     }
 }
