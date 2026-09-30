@@ -1,6 +1,6 @@
 {
-  "roadmap": "docs/steerpin/roadmap.md",
-  "later": "docs/steerpin/later.md",
+  "roadmap": ".claude/steerpin/roadmap.md",
+  "later": ".claude/steerpin/later.md",
   "maxActiveMarks": 15,
   "maxMarkLength": 500
 }

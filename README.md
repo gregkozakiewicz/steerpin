@@ -6,8 +6,8 @@ Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key
 |---|---|---|
 | `⌥⇧R` | **Priority** | Keeps it at the top of its attention, every turn |
 | `⌥⇧W` | **Wrong** | Stops relying on it, and corrects anything built on it |
-| `⌥⇧A` | **Add to roadmap** | Nothing. The text is saved to `docs/steerpin/roadmap.md`, word for word |
-| `⌥⇧S` | **Save for later** | Nothing. The text is saved to `docs/steerpin/later.md`, word for word |
+| `⌥⇧A` | **Add to roadmap** | Nothing. The text is saved to `.claude/steerpin/roadmap.md`, word for word |
+| `⌥⇧S` | **Save for later** | Nothing. The text is saved to `.claude/steerpin/later.md`, word for word |
 
 `⌥` is Option and `⇧` is Shift. All four keys sit under your left hand.
 
@@ -172,30 +172,34 @@ Optional, per project, in `.claude/steerpin/config.json`. Anything you leave out
 
 ```json
 {
-  "roadmap": "docs/steerpin/roadmap.md",
-  "later": "docs/steerpin/later.md",
+  "roadmap": ".claude/steerpin/roadmap.md",
+  "later": ".claude/steerpin/later.md",
   "maxActiveMarks": 15,
   "maxMarkLength": 500
 }
 ```
 
-- `roadmap`, `later`: where saved items go, relative to the project root. Missing files and folders are created.
+- `roadmap`, `later`: where saved items go, relative to the project root. Missing files and folders are created. To share your roadmap with the team, point it somewhere git tracks, such as `"docs/roadmap.md"`.
 - `maxActiveMarks`: at most this many marks (the newest) are sent to Claude.
 - `maxMarkLength`: longer marks are shortened in what Claude sees. The full text stays in `marks.md`.
 
 ## Where things are saved
 
-| Path | What |
-|---|---|
-| `~/.steerpin/inbox.jsonl` | Where the hotkeys write. Emptied on your next message |
-| `.claude/steerpin/marks.md` | Active priority and wrong marks for this project. You can edit it by hand |
-| `docs/steerpin/roadmap.md`, `docs/steerpin/later.md` | Saved roadmap and later items |
+Everything stays private to you, in one folder per project:
 
-Marks are personal, so you'll usually want to keep them out of git. Add this to `.gitignore`:
+| Path | What | Cleared by `/steerpin:clear-marks`? |
+|---|---|---|
+| `.claude/steerpin/marks.md` | Active priority and wrong marks | Yes |
+| `.claude/steerpin/roadmap.md` | Roadmap items | No |
+| `.claude/steerpin/later.md` | Save-for-later items | No |
+| `.claude/steerpin/config.json` | Optional [settings](#settings) | No |
+| `~/.steerpin/inbox.jsonl` | Where the hotkeys write, in your home folder. Emptied on your next message | |
 
-```gitignore
-.claude/steerpin/marks.md
-```
+All of these are plain Markdown or JSON, so you can open and edit them by hand.
+
+The first time Steerpin saves something in a git repository, it adds `.claude/steerpin/` to the project's `.gitignore` and tells you once. Your marks, roadmap and later items are never committed unless you change that.
+
+Each project folder has its own set. Opening Claude Code in a different folder starts with no marks; the old folder's marks are still there when you go back.
 
 ## Good to know
 

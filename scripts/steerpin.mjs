@@ -21,10 +21,11 @@ const CLAIM_PREFIX = 'inbox.jsonl.claim-';
 const STALE_CLAIM_MS = 30_000;
 const MARKS_REL = '.claude/steerpin/marks.md';
 const CONFIG_REL = '.claude/steerpin/config.json';
+const IGNORE_LINE = '.claude/steerpin/';
 const MAX_CONTEXT_CHARS = 9000;
 const DEFAULTS = {
-  roadmap: 'docs/steerpin/roadmap.md',
-  later: 'docs/steerpin/later.md',
+  roadmap: '.claude/steerpin/roadmap.md',
+  later: '.claude/steerpin/later.md',
   maxActiveMarks: 15,
   maxMarkLength: 500,
 };
@@ -211,7 +212,28 @@ function applyItems(dir, cfg, items) {
   }
 
   if (marksChanged) writeMarks(dir, state);
+  if (marksChanged || Object.keys(result.saved).length) result.gitignored = ensureGitignore(dir);
   return result;
+}
+
+// Keeps steerpin's files out of git: adds .claude/steerpin/ to the repo's .gitignore once.
+function ensureGitignore(dir) {
+  if (!fs.existsSync(path.join(dir, '.git'))) return false;
+  const file = path.join(dir, '.gitignore');
+  let content = '';
+  try {
+    content = fs.readFileSync(file, 'utf8');
+  } catch {
+    // no .gitignore yet
+  }
+  const covered = content
+    .split('\n')
+    .map((l) => l.trim().replace(/^\//, '').replace(/\/?\*{0,2}$/, ''))
+    .some((l) => l === '.claude' || l === '.claude/steerpin');
+  if (covered) return false;
+  const sep = content && !content.endsWith('\n') ? '\n' : '';
+  fs.writeFileSync(file, `${content}${sep}${IGNORE_LINE}\n`);
+  return true;
 }
 
 function appendToList(dir, relPath, item) {
@@ -299,6 +321,7 @@ function userMessage(result, truncated) {
   for (const [rel, n] of Object.entries(result.saved)) parts.push(`${n} saved to ${rel}`);
   const newTruncated = truncated.filter((id) => result.newIds.includes(id));
   if (newTruncated.length) parts.push(`${newTruncated.map((id) => `[${id}]`).join(' ')} truncated in context (long selection)`);
+  if (result.gitignored) parts.push(`added ${IGNORE_LINE} to .gitignore`);
   return parts.length ? `steerpin: ${parts.join('; ')}` : '';
 }
 
@@ -426,6 +449,7 @@ function add(args) {
   const cfg = loadConfig(dir);
   const item = { ...parsed, timestamp: new Date().toISOString(), source: '/steerpin:mark' };
   const result = applyItems(dir, cfg, [item]);
+  if (result.gitignored) console.log(`Added ${IGNORE_LINE} to .gitignore.`);
   if (result.newIds.length) console.log(`Added [${result.newIds[0]}] ${item.type}. It will be sent with every message until removed.`);
   else if (Object.keys(result.saved).length) console.log(`Saved to ${cfg[item.type]}.`);
   else console.log('Already marked, nothing changed.');

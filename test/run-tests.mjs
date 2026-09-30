@@ -80,11 +80,11 @@ test('roadmap and later go to files, not context', () => {
   inbox({ type: 'roadmap', text: 'Export to Figma variables' }, { type: 'later', text: 'Try Raycast\nsecond line' });
   const out = hook();
   assert.equal(context(out), '');
-  assert.match(out.systemMessage, /1 saved to docs\/steerpin\/roadmap.md; 1 saved to docs\/steerpin\/later.md/);
-  const roadmap = read('docs/steerpin/roadmap.md');
+  assert.match(out.systemMessage, /1 saved to .claude\/steerpin\/roadmap.md; 1 saved to .claude\/steerpin\/later.md/);
+  const roadmap = read('.claude/steerpin/roadmap.md');
   assert.match(roadmap, /^# Roadmap/);
   assert.match(roadmap, /- Export to Figma variables\n  _2026-09-30 \d\d:\d\d · marked in iTerm2_/);
-  assert.match(read('docs/steerpin/later.md'), /- Try Raycast\n  second line\n/);
+  assert.match(read('.claude/steerpin/later.md'), /- Try Raycast\n  second line\n/);
 });
 
 test('exact duplicates are skipped', () => {
@@ -93,7 +93,7 @@ test('exact duplicates are skipped', () => {
   inbox({ type: 'roadmap', text: 'Idea' });
   hook();
   assert.equal((read('.claude/steerpin/marks.md').match(/## \[/g) || []).length, 1);
-  assert.equal((read('docs/steerpin/roadmap.md').match(/- Idea/g) || []).length, 1);
+  assert.equal((read('.claude/steerpin/roadmap.md').match(/- Idea/g) || []).length, 1);
 });
 
 test('re-marking text as another type replaces it', () => {
@@ -165,7 +165,7 @@ test('stale claim files are recovered, fresh ones left alone', () => {
 test('unmark, list and clear', () => {
   inbox({ type: 'priority', text: 'p1' }, { type: 'wrong', text: 'w1' }, { type: 'roadmap', text: 'r1' });
   const listed = run(['list']);
-  assert.match(listed, /1 saved to docs\/steerpin\/roadmap.md/);
+  assert.match(listed, /1 saved to .claude\/steerpin\/roadmap.md/);
   assert.match(listed, /Priority:\n  \[1\] p1/);
   assert.match(listed, /Wrong:\n  \[2\] w1/);
   assert.match(run(['unmark', '[1]', '7']), /Removed \[1\] priority: p1\nNo active mark with id 7/);
@@ -176,14 +176,14 @@ test('unmark, list and clear', () => {
   assert.match(context(hook()), /\[3\] p2/); // ids are not reused
   assert.match(run(['clear']), /Removed 2 marks/);
   assert.equal(hook(), null);
-  assert.match(read('docs/steerpin/roadmap.md'), /r1/);
+  assert.match(read('.claude/steerpin/roadmap.md'), /r1/);
   assert.match(run(['list']), /No active marks/);
 });
 
 test('add writes directly; capture writes to the inbox', () => {
   assert.match(run(['add', 'wrong'], 'it\'s "quoted" $HOME `x`\n'), /Added \[1\] wrong/);
   assert.match(context(hook()), /\[1\] "it's "quoted" \$HOME `x`"/);
-  assert.match(run(['add', 'roadmap', 'from', 'args']), /Saved to docs\/steerpin\/roadmap.md/);
+  assert.match(run(['add', 'roadmap', 'from', 'args']), /Saved to .claude\/steerpin\/roadmap.md/);
   assert.match(run(['add', 'nope', 'x']), /Usage/);
   run(['capture', 'priority', 'captured']);
   assert.match(fs.readFileSync(path.join(home, 'inbox.jsonl'), 'utf8'), /"type":"priority","text":"captured"/);
@@ -214,6 +214,30 @@ test('session-start suggests setting up hotkeys only when needed', () => {
   assert.equal(tip(), '');
   inbox({ type: 'priority', text: 'p' });
   assert.equal(JSON.parse(run(['hook'], '{}')).systemMessage, 'steerpin: new mark [1]'); // no tip on normal messages
+});
+
+test('.claude/steerpin/ is added to .gitignore once, only in git repos', () => {
+  inbox({ type: 'priority', text: 'p' });
+  hook();
+  assert.equal(fs.existsSync(path.join(project, '.gitignore')), false); // not a git repo
+
+  fs.mkdirSync(path.join(project, '.git'));
+  fs.writeFileSync(path.join(project, '.gitignore'), 'node_modules/');
+  inbox({ type: 'roadmap', text: 'r' });
+  assert.match(hook().systemMessage, /added \.claude\/steerpin\/ to \.gitignore/);
+  assert.equal(read('.gitignore'), 'node_modules/\n.claude/steerpin/\n');
+
+  inbox({ type: 'wrong', text: 'w' });
+  assert.doesNotMatch(hook().systemMessage, /gitignore/);
+  assert.equal(read('.gitignore'), 'node_modules/\n.claude/steerpin/\n');
+});
+
+test('an existing .claude ignore rule is respected', () => {
+  fs.mkdirSync(path.join(project, '.git'));
+  fs.writeFileSync(path.join(project, '.gitignore'), '/.claude/*\n');
+  inbox({ type: 'priority', text: 'p' });
+  hook();
+  assert.equal(read('.gitignore'), '/.claude/*\n');
 });
 
 test('unwritable project fails silently with exit 0', () => {
