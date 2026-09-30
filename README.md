@@ -17,46 +17,44 @@ Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key
 
 About three minutes. You need:
 
-- macOS 13 or later (for the hotkeys; on other systems, see [Without hotkeys](#without-hotkeys))
+- macOS 13 or later (on other systems, see [Without hotkeys](#without-hotkeys))
 - [Claude Code](https://code.claude.com)
 - [Node.js](https://nodejs.org) 18 or later. Check with `node --version`.
 
-### Step 1: install the plugin
+### Step 1: download the app
 
-In Claude Code, run these two commands:
+**[Download Steerpin.zip](https://github.com/gregkozakiewicz/steerpin/releases/latest/download/Steerpin.zip)**, unzip it, and drag **Steerpin.app** into **Applications**.
 
-```
-/plugin marketplace add gregkozakiewicz/steerpin
-```
+Steerpin is a small menu bar app. It owns the hotkeys, copies your selection, puts your clipboard back, and confirms each mark with a popup under its pin icon.
 
-```
-/plugin install steerpin@steerpin
-```
+### Step 2: open it
 
-Then quit and reopen Claude Code so the plugin loads.
+The app isn't signed with a paid Apple developer account, so the first time you open it macOS says it can't verify it:
 
-### Step 2: install the Steerpin app
+1. Click **Done** (not Move to Trash).
+2. Open **System Settings › Privacy & Security**, scroll down to the message about Steerpin, and click **Open Anyway**. Confirm with your password or Touch ID.
 
-The app is a small menu bar app that owns the hotkeys. It copies your selection, puts your clipboard back, and confirms each mark with a popup under its pin icon.
+You only do this once.
 
-1. **[Download Steerpin.zip](https://github.com/gregkozakiewicz/steerpin/releases/latest/download/Steerpin.zip)**, unzip it, and drag **Steerpin.app** into **Applications**.
-2. **Open it.** The app isn't signed with a paid Apple developer account, so the first time macOS says it can't verify it:
-   1. Click **Done** (not Move to Trash).
-   2. Open **System Settings › Privacy & Security**, scroll down to the message about Steerpin, and click **Open Anyway**. Confirm with your password or Touch ID.
+### Step 3: allow Accessibility
 
-   You only do this once.
-3. **Allow Accessibility access.** macOS asks for it right away. Click **Open System Settings** and turn on **Steerpin**. The app needs this to copy your selection, and it's the only permission it asks for.
-4. When you see **Steerpin is ready** under the pin icon, you're done.
+macOS asks right away. Click **Open System Settings** and turn on **Steerpin**. The app needs this to copy your selection, and it's the only permission it asks for.
 
-Click the pin icon and choose **Launch at Login** so the hotkeys keep working after a restart.
+When the pin icon appears in your menu bar and **Steerpin is ready** shows under it, this step is done.
 
-### Step 3: test it
+### Step 4: connect to Claude Code
+
+The app asks **Connect Steerpin to Claude Code?** Click **Connect**. It installs the Steerpin plugin into Claude Code for you. Then quit and reopen Claude Code.
+
+Missed the question? Click the pin icon › **Connect to Claude Code**.
+
+Finally, click the pin icon and turn on **Launch at Login**, so the hotkeys keep working after a restart.
+
+### Test it
 
 1. Select a sentence anywhere, for example in a browser.
-2. Press `⌥⇧R`.
-3. A popup under the pin icon says **Marked as priority** with a preview of your text.
-
-Then in Claude Code, send any message. You'll see a line like `steerpin: new mark [1]`, and Claude now has the mark.
+2. Press `⌥⇧R`. A popup under the pin says **Marked as priority**.
+3. In Claude Code, send any message. You'll see `steerpin: new mark [1]`, and Claude now has the mark.
 
 If something doesn't work, see [Troubleshooting](#troubleshooting).
 
@@ -86,7 +84,7 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 
 ### The menu bar app
 
-Click the pin icon to see the shortcuts, how many marks are waiting for your next message, your recent marks, **Launch at Login**, and **Quit**. A crossed-out pin means Accessibility access is off.
+Click the pin icon to see the shortcuts, how many marks are waiting for your next message, your recent marks, the Claude Code connection, **Launch at Login**, and **Quit**. When the app is newer than your Claude Code plugin, it offers **Update Plugin**. A crossed-out pin means Accessibility access is off.
 
 ### Commands
 
@@ -110,7 +108,8 @@ Click the pin icon to see the shortcuts, how many marks are waiting for your nex
 Select the text again and press the key while the selection is still highlighted. Some apps clear the selection when you click elsewhere.
 
 **Claude doesn't see my marks.**
-- Quit and reopen Claude Code after installing the plugin.
+- Click the pin icon and check that the **Claude Code** section says **Connected**. If it offers **Connect** or **Update Plugin**, click it.
+- Quit and reopen Claude Code after connecting.
 - Check that Node.js works: `node --version`.
 - Run `/steerpin:marks` to see what's active.
 
@@ -135,6 +134,18 @@ require("steerpin").setup({
     later = false, -- turns this key off
   },
 })
+```
+
+## Installing the plugin by hand
+
+The app installs the plugin for you. To do it yourself instead, for example on Linux or Windows, run these in Claude Code, then restart it:
+
+```
+/plugin marketplace add gregkozakiewicz/steerpin
+```
+
+```
+/plugin install steerpin@steerpin
 ```
 
 ## Without hotkeys
