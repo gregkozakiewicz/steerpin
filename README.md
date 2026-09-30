@@ -3,17 +3,16 @@
   <img src="assets/steerpin-logo.png" width="180" alt="Steerpin">
 </picture>
 
-
 Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key, and Claude keeps that mark in mind on every message until you remove it.
 
-| Keys | Mark | What Claude does |
+| Keys | Action | What happens |
 |---|---|---|
-| `⌥⇧R` | **Priority** | Keeps it at the top of its attention, every turn |
-| `⌥⇧W` | **Wrong** | Stops relying on it, and corrects anything built on it |
-| `⌥⇧A` | **Add to roadmap** | Nothing. The text is saved to `.claude/steerpin/roadmap.md`, word for word |
-| `⌥⇧S` | **Save for later** | Nothing. The text is saved to `.claude/steerpin/later.md`, word for word |
-
-Marked the wrong thing? `⌥⇧Z` undoes your last mark. Using ChatGPT or Claude.ai? `⌥⇧C` copies your marks to paste into any chat.
+| `⌥⇧R` | **Priority** | Claude keeps it at the top of its attention, every turn |
+| `⌥⇧W` | **Wrong** | Claude stops relying on it, and corrects anything built on it |
+| `⌥⇧A` | **Add to roadmap** | The text is saved to `.claude/steerpin/roadmap.md`, word for word |
+| `⌥⇧S` | **Save for later** | The text is saved to `.claude/steerpin/later.md`, word for word |
+| `⌥⇧Z` | **Undo** | Removes your last mark before it's sent |
+| `⌥⇧C` | **Copy marks** | Copies your priority and wrong marks to paste into ChatGPT, Claude.ai or any chat |
 
 `⌥` is Option and `⇧` is Shift. All the keys sit under your left hand.
 
