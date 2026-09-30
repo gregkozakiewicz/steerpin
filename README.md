@@ -109,7 +109,7 @@ The menu reads the same files Claude sees, so it always matches what Claude has.
 
 ### The menu bar app
 
-Click the pin icon to mark text by clicking instead of using the shortcuts, or to see how many marks are waiting for your next message, your recent marks, the Claude Code connection, **Launch at Login**, and **Quit**. When the app is newer than your Claude Code plugin, it offers **Update Plugin**. A crossed-out pin means Accessibility access is off.
+Click the pin icon to mark text by clicking instead of using the shortcuts, or to see how many marks are waiting for your next message, your recent marks, the Claude Code connection, **Launch at Login**, and **Quit**. When a newer Claude Code plugin is published, the app offers **Update Plugin**. A crossed-out pin means Accessibility access is off.
 
 ### Commands
 
@@ -129,6 +129,9 @@ Click the pin icon to mark text by clicking instead of using the shortcuts, or t
 - If the pin is crossed out, click it › **Allow Accessibility Access…** and turn Steerpin on.
 - If Accessibility looks on but the pin stays crossed out, macOS is holding an outdated entry. This can happen once when updating from 0.2.1 or earlier. Run `tccutil reset Accessibility com.gregkozakiewicz.steerpin` in Terminal, then allow Steerpin again.
 - Click the pin icon. If a shortcut says **(used by another app)**, another app has taken that key combination. Quit that app, then quit and reopen Steerpin.
+
+**I can't see the pin icon.**
+Open Steerpin again from Applications or Spotlight. A window confirms it's running and can open **System Settings › Menu Bar**, where Steerpin must be switched on under **Allow in the Menu Bar**. If it's on, your menu bar is probably full: macOS hides icons that don't fit, especially next to the camera notch. The same window can also quit Steerpin.
 
 **The popup says "No text selected".**
 Select the text again and press the key while the selection is still highlighted. Some apps clear the selection when you click elsewhere.

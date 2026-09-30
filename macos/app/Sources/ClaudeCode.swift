@@ -6,7 +6,7 @@ enum ClaudeCode {
     enum PluginState: Equatable {
         case noCLI
         case notInstalled
-        case outdated(installed: String)
+        case outdated(installed: String, available: String)
         case connected
     }
 
@@ -49,21 +49,44 @@ enum ClaudeCode {
         return user["version"] as? String
     }
 
+    /// Offers an update only when GitHub has a newer plugin than the installed one.
+    /// Uses the last known published version; call `refreshPublishedVersion()` off the main thread.
     static func state() -> PluginState {
         guard find("claude") != nil else { return .noCLI }
         guard let installed = installedVersion else { return .notInstalled }
-        guard isOlder(installed, than: appVersion) else { return .connected }
-        // An update already ran and this is the newest plugin published. Don't offer it again.
-        if UserDefaults.standard.string(forKey: latestKey) == installed { return .connected }
-        return .outdated(installed: installed)
+        guard let published = publishedVersion, isOlder(installed, than: published) else { return .connected }
+        return .outdated(installed: installed, available: published)
     }
 
-    /// Per app version: a newer app release checks for plugin updates again.
-    private static var latestKey: String { "latestPublishedPlugin-\(appVersion)" }
+    private static let manifestURL =
+        URL(string: "https://raw.githubusercontent.com/gregkozakiewicz/steerpin/main/.claude-plugin/plugin.json")!
+    private static let queue = DispatchQueue(label: "steerpin.published-version")
+    private static var published: (version: String, fetched: Date)?
 
-    /// 0.3.1 to 0.4.0 stored this without a version and never offered updates again.
-    static func forgetStaleUpdateCheck() {
-        UserDefaults.standard.removeObject(forKey: "latestPublishedPlugin")
+    static var publishedVersion: String? { queue.sync { published?.version } }
+
+    /// Asks GitHub for the newest plugin version, at most once an hour. Blocks, so never call it on the main thread.
+    static func refreshPublishedVersion(force: Bool = false) {
+        if !force, let fetched = queue.sync(execute: { published?.fetched }), Date().timeIntervalSince(fetched) < 3600 { return }
+        var request = URLRequest(url: manifestURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+        request.httpMethod = "GET"
+        let done = DispatchSemaphore(value: 0)
+        var version: String?
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            if let data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                version = json["version"] as? String
+            }
+            done.signal()
+        }.resume()
+        done.wait()
+        if let version { queue.sync { published = (version, Date()) } }
+    }
+
+    /// Settings from 0.3.1 to 0.4.1, which remembered the latest version and could stop offering updates.
+    static func forgetOldUpdateChecks() {
+        for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("latestPublishedPlugin") {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     /// Installs the plugin, or updates it when it's already there. Runs off the main thread.
@@ -84,9 +107,7 @@ enum ClaudeCode {
                     return finish(false, lastLine)
                 }
             }
-            if updating, let now = installedVersion, isOlder(now, than: appVersion) {
-                UserDefaults.standard.set(now, forKey: latestKey)
-            }
+            refreshPublishedVersion(force: true)
             if find("node") == nil {
                 return finish(true, "Also install Node.js 18 or later, which the plugin needs")
             }

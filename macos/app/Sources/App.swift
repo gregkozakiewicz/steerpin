@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.copySteering()
         }
 
-        ClaudeCode.forgetStaleUpdateCheck()
+        ClaudeCode.forgetOldUpdateChecks()
 
         // The app used to keep its own copy lists; the project files replaced them.
         try? FileManager.default.removeItem(at: Inbox.folder.appendingPathComponent("chat-marks.json"))
@@ -280,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Checking runs a shell once to find `claude`, so it happens off the main thread.
     private func refreshPluginState(then next: ((ClaudeCode.PluginState) -> Void)? = nil) {
         DispatchQueue.global(qos: .utility).async {
+            ClaudeCode.refreshPublishedVersion()
             let state = ClaudeCode.state()
             DispatchQueue.main.async {
                 self.pluginState = state
@@ -288,25 +289,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Asks once per app version whether to install or update the Claude Code plugin.
+    /// Asks whether to install the Claude Code plugin (once per app version),
+    /// or to update it (once per newly published plugin version).
     private func offerToConnect() {
         refreshPluginState { [weak self] state in
             guard let self else { return }
-            let key = "offeredConnect-\(ClaudeCode.appVersion)"
-            guard !UserDefaults.standard.bool(forKey: key) else { return }
             let alert = NSAlert()
+            let key: String
             switch state {
             case .notInstalled:
+                key = "offeredConnect-\(ClaudeCode.appVersion)"
                 alert.messageText = "Connect Steerpin to Claude Code?"
                 alert.informativeText = "This installs the Steerpin plugin, which gives your marks to Claude with every message."
                 alert.addButton(withTitle: "Connect")
-            case .outdated(let installed):
+            case .outdated(let installed, let available):
+                key = "offeredUpdate-\(available)"
                 alert.messageText = "Update the Claude Code plugin?"
-                alert.informativeText = "Your Steerpin plugin is version \(installed). This app works best with \(ClaudeCode.appVersion)."
+                alert.informativeText = "Steerpin plugin \(available) is available. You have \(installed)."
                 alert.addButton(withTitle: "Update")
             default:
                 return
             }
+            guard !UserDefaults.standard.bool(forKey: key) else { return }
             alert.addButton(withTitle: "Not Now")
             UserDefaults.standard.set(true, forKey: key)
             NSApp.activate(ignoringOtherApps: true)
@@ -353,7 +357,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         updateIcon()
-        if !connecting, pluginState != nil { pluginState = ClaudeCode.state() }
+        if !connecting, pluginState != nil {
+            pluginState = ClaudeCode.state()
+            refreshPluginState() // checks GitHub at most once an hour; the result shows next time
+        }
         menu.removeAllItems()
 
         if !Selection.hasAccess {
@@ -426,8 +433,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(entry)
         case .notInstalled:
             menu.addItem(item("Connect to Claude Code", #selector(connectClaudeCode)))
-        case .outdated(let installed):
-            menu.addItem(item("Update Plugin (\(installed) → \(ClaudeCode.appVersion))", #selector(connectClaudeCode)))
+        case .outdated(let installed, let available):
+            menu.addItem(item("Update Plugin (\(installed) → \(available))", #selector(connectClaudeCode)))
         case .noCLI:
             menu.addItem(info("Claude Code not found"))
             menu.addItem(item("Get Claude Code…", #selector(getClaudeCode)))
