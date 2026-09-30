@@ -18,7 +18,8 @@ const TYPES = ['priority', 'wrong', 'roadmap', 'later'];
 const ACTIVE_TYPES = ['priority', 'wrong'];
 const HOME = process.env.STEERPIN_HOME || path.join(os.homedir(), '.steerpin');
 const INBOX = path.join(HOME, 'inbox.jsonl');
-const LAST_PROJECT = path.join(HOME, 'last-project.json');
+const PROJECTS = path.join(HOME, 'projects.json');
+const MAX_PROJECTS = 20;
 const CLAIM_PREFIX = 'inbox.jsonl.claim-';
 const STALE_CLAIM_MS = 30_000;
 const MARKS_REL = '.claude/steerpin/marks.md';
@@ -335,22 +336,25 @@ function userMessage(result, truncated) {
   return parts.length ? `steerpin: ${parts.join('; ')}` : '';
 }
 
-// Tells the Steerpin app which project Claude Code worked in last, so its Copy menu reads that project's files.
+// Keeps the Steerpin app's list of recent projects, newest first, so its menu can show them by name.
 function rememberProject(dir, cfg) {
-  const info = {
+  let projects = [];
+  try {
+    projects = JSON.parse(fs.readFileSync(PROJECTS, 'utf8'));
+  } catch {
+    // first project
+  }
+  const entry = {
     project: dir,
     marks: marksPath(dir),
     roadmap: path.resolve(dir, cfg.roadmap),
     later: path.resolve(dir, cfg.later),
+    lastUsed: new Date().toISOString(),
   };
-  const json = JSON.stringify(info, null, 2) + '\n';
-  try {
-    if (fs.readFileSync(LAST_PROJECT, 'utf8') === json) return;
-  } catch {
-    // not written yet
-  }
+  projects = [entry, ...projects.filter((p) => p.project !== dir)].slice(0, MAX_PROJECTS);
   fs.mkdirSync(HOME, { recursive: true });
-  writeAtomic(LAST_PROJECT, json);
+  writeAtomic(PROJECTS, JSON.stringify(projects, null, 2) + '\n');
+  fs.rmSync(path.join(HOME, 'last-project.json'), { force: true }); // replaced by projects.json
 }
 
 // Marks belong to the project, so a brand-new chat inherits them. Say so, so the user can start fresh.

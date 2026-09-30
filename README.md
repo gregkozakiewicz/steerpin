@@ -12,7 +12,7 @@ Mark text in a Claude Code chat with a hotkey. Highlight a sentence, press a key
 | `⌥⇧A` | **Add to roadmap** | The text is saved to `.claude/steerpin/roadmap.md`, word for word |
 | `⌥⇧S` | **Save for later** | The text is saved to `.claude/steerpin/later.md`, word for word |
 | `⌥⇧Z` | **Undo** | Removes your last mark before it's sent |
-| `⌥⇧C` | **Copy marks** | Copies your priority and wrong marks as a block you can paste anywhere |
+| `⌥⇧C` | **Copy marks** | Copies the priority and wrong marks of your most recent project, to paste anywhere |
 
 `⌥` is Option and `⇧` is Shift. All the keys sit under your left hand.
 
@@ -92,17 +92,20 @@ When you mark something as wrong, Claude opens its next reply with a line like *
 - **Before you send your next message:** press `⌥⇧Z` (or pin menu › **Undo Last Mark**). The newest waiting mark is removed, and Claude never sees it.
 - **After you sent it:** run `/steerpin:undo` in Claude Code. It removes what that message delivered, and if a mark replaced an older one (priority re-marked as wrong), it brings the old one back.
 
-### Copying marks
+### Projects in the menu
 
-The pin menu's **Copy from ‹project›** section copies marks from the project you last used in Claude Code, as ready-to-paste lists:
+The pin menu lists your 5 most recent Claude Code projects that have marks, newest first, with how many priority and wrong marks each has. Each project has its own menu:
 
-| Menu item | Copies |
+| Menu item | What it does |
 |---|---|
-| **Copy Priority & Wrong Marks** (also `⌥⇧C`) | Your active priority and wrong marks, with a line asking the assistant to keep applying them. Useful for chats outside Claude Code, like Claude.ai. |
-| **Copy Saved Marks** | Everything in the project's saved-for-later list |
-| **Copy Roadmap Marks** | Everything in the project's roadmap |
+| **Copy Priority and Wrong Marks** | Copies them as a block you can paste into any chat, with a line asking the assistant to keep applying them. `⌥⇧C` does this for the most recent project. |
+| **Copy Saved Marks** | Copies everything in the project's saved-for-later list |
+| **Copy Roadmap Marks** | Copies everything in the project's roadmap |
+| **Open Marks File** | Opens the project's `marks.md` |
+| **Clear Priority and Wrong Marks…** | Asks first, then removes them: Claude stops receiving them. Roadmap and saved marks stay. |
+| **Undo Clear** | Puts the cleared marks back. Available until you clear that project again. |
 
-It reads the same files Claude sees, so it always matches: marks you removed with `/steerpin:unmark` or `/steerpin:clear-marks` aren't copied. Marks you made but haven't sent yet are included.
+The menu reads the same files Claude sees, so it always matches what Claude has. Marks you made but haven't sent yet count toward the most recent project.
 
 ### The menu bar app
 
@@ -222,7 +225,7 @@ Each project folder has its own set. Opening Claude Code in a different folder s
 
 ## Good to know
 
-- **New chat, same project.** Marks belong to the project folder, so a new chat starts with the old ones. You'll see `steerpin: 3 marks carried over from an earlier chat…`. Keep going if you're continuing the same work, or run `/steerpin:clear-marks` to start fresh.
+- **New chat, same project.** Marks belong to the project folder, so a new chat starts with the old ones. You'll see `steerpin: 3 marks carried over from an earlier chat…`. Keep going if you're continuing the same work, or clear them from the pin menu (project › **Clear Priority and Wrong Marks…**) to start fresh.
 - **Two Claude Code sessions open at once.** The hotkeys don't know which project you're in. Marks go to whichever session you send the next message in.
 - **Marking while Claude is still answering** is fine. The marks arrive with your next message.
 - **Marking the same text twice** does nothing. Marking it with a different type (priority, then wrong) replaces the old mark.

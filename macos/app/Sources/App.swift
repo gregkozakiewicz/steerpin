@@ -94,22 +94,131 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               title: "Undid \(removed.type.name.lowercased()) mark", detail: removed.text)
     }
 
-    @objc private func copySteering() { copy(.steering, name: "priority & wrong mark") }
-    @objc private func copySaved() { copy(.saved, name: "saved mark") }
-    @objc private func copyRoadmap() { copy(.roadmap, name: "roadmap mark") }
+    // MARK: Projects
 
-    private func copy(_ list: MarkLists.List, name: String) {
-        guard let block = MarkLists.block(list) else {
+    /// ⌥⇧C copies from the project Claude Code worked in last.
+    @objc private func copySteering() {
+        guard let project = Project.latest else {
             flash(symbol: "doc.on.clipboard", tint: .secondaryLabelColor, title: "Nothing to copy",
-                  detail: "No \(name)s yet")
+                  detail: "Send a message in Claude Code first")
+            return
+        }
+        copy(.steering, from: project)
+    }
+
+    private func project(for sender: NSMenuItem) -> Project? {
+        guard let path = sender.representedObject as? String else { return nil }
+        return Project.recent(limit: 20).first { $0.project == path } ?? (Project.latest?.project == path ? Project.latest : nil)
+    }
+
+    @objc private func copyFromMenu(_ sender: NSMenuItem) {
+        guard let project = project(for: sender) else { return }
+        let lists: [Project.List] = [.steering, .saved, .roadmap]
+        copy(lists[sender.tag], from: project)
+    }
+
+    private func copy(_ list: Project.List, from project: Project) {
+        let name: String
+        switch list {
+        case .steering: name = "priority and wrong mark"
+        case .saved: name = "saved mark"
+        case .roadmap: name = "roadmap mark"
+        }
+        guard let block = project.block(list) else {
+            flash(symbol: "doc.on.clipboard", tint: .secondaryLabelColor, title: "Nothing to copy",
+                  detail: "No \(name)s in \(project.name)")
             return
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(block, forType: .string)
-        let n = MarkLists.count(list)
+        let n = project.count(list)
         flash(symbol: "doc.on.clipboard.fill", tint: .systemBlue,
-              title: "Copied \(n) \(name)\(n == 1 ? "" : "s")",
-              detail: "From \(MarkLists.projectName ?? "your project"). Paste anywhere with ⌘V")
+              title: "Copied \(n) \(name)\(n == 1 ? "" : "s")", detail: "From \(project.name). Paste anywhere with ⌘V")
+    }
+
+    @objc private func openMarksFile(_ sender: NSMenuItem) {
+        project(for: sender)?.openMarksFile()
+    }
+
+    @objc private func clearFromMenu(_ sender: NSMenuItem) {
+        guard let project = project(for: sender) else { return }
+        let n = project.count(.steering)
+        let alert = NSAlert()
+        alert.messageText = "Clear \(n) mark\(n == 1 ? "" : "s") from \(project.name)?"
+        alert.informativeText = "Claude stops receiving your priority and wrong marks. Roadmap and saved marks stay. You can undo this from the menu until you do the next clear."
+        alert.addButton(withTitle: "Clear")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let cleared = project.clearSteering()
+        flash(symbol: "trash.circle.fill", tint: .secondaryLabelColor,
+              title: "Cleared \(cleared) mark\(cleared == 1 ? "" : "s")",
+              detail: "From \(project.name). Undo from the menu if you need them back.")
+    }
+
+    @objc private func undoClearFromMenu(_ sender: NSMenuItem) {
+        guard let project = project(for: sender) else { return }
+        project.undoClear()
+        flash(symbol: "arrow.uturn.backward.circle.fill", tint: .systemOrange, title: "Marks restored",
+              detail: "\(project.count(.steering)) priority and wrong marks in \(project.name)")
+    }
+
+    private func projectMenu(_ project: Project) -> NSMenu {
+        let sub = NSMenu()
+        sub.autoenablesItems = false
+        let where_ = [project.displayPath, project.lastUsedText].filter { !$0.isEmpty }.joined(separator: " · ")
+        sub.addItem(info(where_))
+        let entries: [(String, Project.List)] = [
+            ("Copy Priority and Wrong Marks", .steering), ("Copy Saved Marks", .saved), ("Copy Roadmap Marks", .roadmap),
+        ]
+        for (index, (title, list)) in entries.enumerated() {
+            let n = project.count(list)
+            let entry = item(n == 0 ? title : "\(title) (\(n))", #selector(copyFromMenu(_:)))
+            entry.tag = index
+            entry.representedObject = project.project
+            entry.isEnabled = n > 0
+            if list == .steering, project.isLatest, copyAvailable { shortcut(entry, UInt32(kVK_ANSI_C)) }
+            sub.addItem(entry)
+        }
+        sub.addItem(.separator())
+        let open = item("Open Marks File", #selector(openMarksFile(_:)))
+        open.representedObject = project.project
+        sub.addItem(open)
+        sub.addItem(.separator())
+        let steering = project.count(.steering)
+        let clear = item("Clear Priority and Wrong Marks…", #selector(clearFromMenu(_:)))
+        clear.representedObject = project.project
+        clear.isEnabled = steering > 0
+        if steering > 0 {
+            clear.attributedTitle = NSAttributedString(string: clear.title, attributes: [
+                .foregroundColor: NSColor.systemRed, .font: NSFont.menuFont(ofSize: 0),
+            ])
+        }
+        sub.addItem(clear)
+        if project.canUndoClear {
+            let undo = item("Undo Clear", #selector(undoClearFromMenu(_:)))
+            undo.representedObject = project.project
+            sub.addItem(undo)
+        }
+        return sub
+    }
+
+    /// "steerpin        3 marks", with the count right-aligned and dimmed.
+    private func projectTitle(_ project: Project) -> NSAttributedString {
+        let n = project.count(.steering)
+        let style = NSMutableParagraphStyle()
+        style.tabStops = [NSTextTab(textAlignment: .right, location: 230)]
+        let title = NSMutableAttributedString(string: project.name, attributes: [
+            .font: NSFont.menuFont(ofSize: 0), .paragraphStyle: style,
+        ])
+        let status = n > 0 ? "\(n) mark\(n == 1 ? "" : "s")" : (project.canUndoClear ? "cleared" : "")
+        if !status.isEmpty {
+            title.append(NSAttributedString(string: "\t\(status)", attributes: [
+                .font: NSFont.menuFont(ofSize: 0), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style,
+            ]))
+        }
+        return title
     }
 
     private func tint(_ type: MarkType) -> NSColor {
@@ -264,21 +373,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(recentItem)
 
         menu.addItem(.separator())
-        menu.addItem(header(MarkLists.projectName.map { "Copy from \($0)" } ?? "Copy to clipboard"))
-        if MarkLists.projectName == nil {
-            menu.addItem(info("Send a message in Claude Code first"))
+        menu.addItem(header("Projects"))
+        let projects = Project.recent()
+        if projects.isEmpty {
+            menu.addItem(info(Project.latest == nil ? "Send a message in Claude Code first" : "No marks yet"))
         }
-        let copyEntry = { (title: String, list: MarkLists.List, action: Selector) -> NSMenuItem in
-            let n = MarkLists.count(list)
-            let entry = self.item(n == 0 ? title : "\(title) (\(n))", action)
-            entry.isEnabled = n > 0
+        for project in projects {
+            let entry = NSMenuItem(title: project.name, action: nil, keyEquivalent: "")
+            entry.attributedTitle = projectTitle(project)
+            entry.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+            entry.submenu = projectMenu(project)
             menu.addItem(entry)
-            return entry
         }
-        let steering = copyEntry("Copy Priority & Wrong Marks", .steering, #selector(copySteering))
-        if copyAvailable { shortcut(steering, UInt32(kVK_ANSI_C)) }
-        _ = copyEntry("Copy Saved Marks", .saved, #selector(copySaved))
-        _ = copyEntry("Copy Roadmap Marks", .roadmap, #selector(copyRoadmap))
 
 
         menu.addItem(.separator())

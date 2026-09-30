@@ -292,13 +292,22 @@ test('a new chat mentions marks carried over; resume and compact stay quiet', ()
   delete process.env.STEERPIN_APP;
 });
 
-test('each message records the project for the app', () => {
-  hook();
-  const info = JSON.parse(fs.readFileSync(path.join(home, 'last-project.json'), 'utf8'));
-  assert.equal(info.project, project);
-  assert.equal(info.marks, path.join(project, '.claude/steerpin/marks.md'));
-  assert.equal(info.roadmap, path.join(project, '.claude/steerpin/roadmap.md'));
-  assert.equal(info.later, path.join(project, '.claude/steerpin/later.md'));
+test('each message moves its project to the top of the recent list', () => {
+  const other = path.join(path.dirname(project), 'other');
+  fs.mkdirSync(other);
+  const hookIn = (dir) => execFileSync('node', [script, 'hook'], {
+    input: '{}',
+    env: { ...process.env, HOME: userHome, STEERPIN_HOME: home, CLAUDE_PROJECT_DIR: dir },
+  });
+  hookIn(project);
+  hookIn(other);
+  hookIn(project);
+  const list = JSON.parse(fs.readFileSync(path.join(home, 'projects.json'), 'utf8'));
+  assert.deepEqual(list.map((p) => p.project), [project, other]);
+  assert.equal(list[0].marks, path.join(project, '.claude/steerpin/marks.md'));
+  assert.equal(list[0].roadmap, path.join(project, '.claude/steerpin/roadmap.md'));
+  assert.equal(list[0].later, path.join(project, '.claude/steerpin/later.md'));
+  assert.ok(!Number.isNaN(Date.parse(list[0].lastUsed)));
 });
 
 test('unwritable project fails silently with exit 0', () => {

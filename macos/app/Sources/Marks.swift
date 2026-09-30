@@ -97,6 +97,36 @@ enum Inbox {
         return (type, text)
     }
 
+    /// Drops waiting marks of the given types, keeping the rest in order. Returns the dropped lines.
+    @discardableResult
+    static func removeWaiting(where shouldRemove: (MarkType) -> Bool) -> [String] {
+        guard let content = try? String(contentsOf: file, encoding: .utf8) else { return [] }
+        var kept: [Substring] = [], removed: [String] = []
+        for line in content.split(separator: "\n") {
+            if let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+               let type = MarkType(rawValue: json["type"] as? String ?? ""), shouldRemove(type) {
+                removed.append(String(line))
+            } else {
+                kept.append(line)
+            }
+        }
+        let rest = kept.isEmpty ? "" : kept.joined(separator: "\n") + "\n"
+        try? rest.write(to: file, atomically: true, encoding: .utf8)
+        return removed
+    }
+
+    /// Appends already-encoded inbox lines, e.g. when undoing a clear.
+    static func appendRaw(_ lines: String) {
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: file.path) {
+            FileManager.default.createFile(atPath: file.path, contents: nil)
+        }
+        guard let handle = try? FileHandle(forWritingTo: file) else { return }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: Data(lines.utf8))
+    }
+
     /// Every mark waiting for the next Claude Code message.
     static func waiting() -> [(type: MarkType, text: String)] {
         guard let content = try? String(contentsOf: file, encoding: .utf8) else { return [] }
