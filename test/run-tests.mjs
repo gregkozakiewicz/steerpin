@@ -60,6 +60,7 @@ test('priority and wrong marks reach the context', () => {
   assert.match(ctx, /\[1\] Tokens must stay platform-agnostic/);
   assert.match(ctx, /\[2\] "Style Dictionary can't handle composite tokens"/);
   assert.match(ctx, /New since last message: \[1\] \[2\]/);
+  assert.match(ctx, /Noted, \[2\] was wrong/);
   assert.match(out.systemMessage, /new marks \[1\] \[2\]/);
   assert.equal(fs.existsSync(path.join(home, 'inbox.jsonl')), false);
 });

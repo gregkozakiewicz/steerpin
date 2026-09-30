@@ -1,6 +1,7 @@
 ---
 description: Remove all active steerpin priority and wrong marks. Roadmap and later files are not touched.
 disable-model-invocation: true
+allowed-tools: Bash(node *)
 ---
 
 !`node "${CLAUDE_PLUGIN_ROOT}/scripts/steerpin.mjs" clear`

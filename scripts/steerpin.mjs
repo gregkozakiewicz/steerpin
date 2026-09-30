@@ -279,7 +279,13 @@ function renderContext(marks, result, cfg) {
 
   const notes = [];
   if (result.newIds.length) {
-    notes.push(`New since last message: ${result.newIds.map((id) => `[${id}]`).join(' ')} (acknowledge these briefly in your reply)`);
+    notes.push(`New since last message: ${result.newIds.map((id) => `[${id}]`).join(' ')}`);
+    const newWrong = shown.filter((m) => m.type === 'wrong' && result.newIds.includes(m.id));
+    if (newWrong.length) {
+      notes.push(
+        `Start your reply with one short line per new wrong mark, e.g. "Noted, [${newWrong[0].id}] was wrong: <what is actually true>". Then answer the message.`,
+      );
+    }
   }
   if (hidden > 0) notes.push(`${hidden} older mark${hidden === 1 ? '' : 's'} not shown (limit ${cfg.maxActiveMarks}), see ${MARKS_REL}`);
   if (notes.length) out.push('', ...notes);
