@@ -11,10 +11,10 @@ In a long session, important points drift out of focus and wrong statements get 
 
    | Key | Mark | What happens |
    |---|---|---|
-   | `⌥⇧P` | priority | Sent to Claude on every message: "keep this at the top of your attention" |
-   | `⌥⇧X` | wrong | Sent to Claude on every message: "don't rely on this; correct anything built on it" |
-   | `⌥⇧R` | roadmap | Appended to `docs/steerpin/roadmap.md` in the project, word for word |
-   | `⌥⇧L` | later | Appended to `docs/steerpin/later.md`, word for word |
+   | `⌥⇧R` | priority | Sent to Claude on every message: "keep this at the top of your attention" |
+   | `⌥⇧W` | wrong | Sent to Claude on every message: "don't rely on this; correct anything built on it" |
+   | `⌥⇧A` | roadmap | Appended to `docs/steerpin/roadmap.md` in the project, word for word |
+   | `⌥⇧S` | later | Appended to `docs/steerpin/later.md`, word for word |
 
 3. A notification confirms it. The mark goes into a global inbox, `~/.steerpin/inbox.jsonl`.
 4. You send your next message as normal. Before Claude reads it, the hook:
@@ -81,14 +81,14 @@ The hotkeys use [Hammerspoon](https://www.hammerspoon.org), a free automation to
    This copies `steerpin.lua` into `~/.hammerspoon/` and adds `require("steerpin")` to your `init.lua`.
 4. Reload Hammerspoon (menu bar icon › Reload Config). Allow notifications when macOS asks.
 
-To test: select some text anywhere, press `⌥⇧P`, and check that a "Marked as priority" notification appears and that `~/.steerpin/inbox.jsonl` has a new line.
+To test: select some text anywhere, press `⌥⇧R`, and check that a "Marked as priority" notification appears and that `~/.steerpin/inbox.jsonl` has a new line.
 
 **Changing the keys.** Replace `require("steerpin")` in `~/.hammerspoon/init.lua` with:
 
 ```lua
 require("steerpin").setup({
   keys = {
-    priority = { { "ctrl", "alt" }, "p" },
+    priority = { { "ctrl", "alt" }, "r" },
     later = false, -- turn a key off
   },
 })

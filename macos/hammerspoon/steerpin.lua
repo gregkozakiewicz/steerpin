@@ -13,10 +13,10 @@ M.defaults = {
   inboxDir = os.getenv("HOME") .. "/.steerpin",
   longSelection = 500, -- warn above this many characters (matches maxMarkLength)
   keys = {
-    priority = { { "alt", "shift" }, "p" },
-    wrong    = { { "alt", "shift" }, "x" },
-    roadmap  = { { "alt", "shift" }, "r" },
-    later    = { { "alt", "shift" }, "l" }, -- set to false to disable
+    priority = { { "alt", "shift" }, "r" },
+    wrong    = { { "alt", "shift" }, "w" },
+    roadmap  = { { "alt", "shift" }, "a" },
+    later    = { { "alt", "shift" }, "s" }, -- set to false to disable
   },
 }
 
